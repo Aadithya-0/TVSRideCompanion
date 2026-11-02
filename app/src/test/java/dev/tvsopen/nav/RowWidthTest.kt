@@ -188,7 +188,7 @@ class RowWidthTest {
         // Windows can end on a word gap; compare trimmed, pin widths exactly.
         assertEquals("RGT to Hill", ntorq.trim())
         assertEquals(RowChars.NTORQ, ntorq.length)
-        assertEquals("RGT to Hill View", jupiter.trim())
+        assertEquals("<- Turn right ont", jupiter.trim())
         assertEquals(RowChars.JUPITER, jupiter.length)
         assertTrue("the Jupiter row must show more", jupiter.length > ntorq.length)
     }
