@@ -120,8 +120,8 @@ dependencies {
 
     // Embedded OpenStreetMap view (docs/MAPS.md). Pinned, not ranged: tile
     // fetching behaviour must not shift under a future release unreviewed.
-    // Verified not to add INTERNET itself — the permission is declared
-    // explicitly in the manifest for map use; CI pins the merged set.
+    // Verified not to add INTERNET itself; CI asserts the merged manifest has
+    // no network capability.
     implementation("org.osmdroid:osmdroid-android:6.1.20")
 }
 

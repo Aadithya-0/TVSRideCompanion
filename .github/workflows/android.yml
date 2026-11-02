@@ -100,21 +100,19 @@ jobs:
       - name: Unit tests and build
         run: ./gradlew :app:testDebugUnitTest :app:assembleDebug --stacktrace
 
-      # INTERNET is declared deliberately since embedded-map support: map
-      # tiles, place search and routing need the network (see docs/MAPS.md for
-      # the closed destination list). The invariant that remains is narrower
-      # and still enforced: no TVS contact. That is a code property — network
-      # call sites live only in dev.tvsopen.nav.maps — not something aapt can
-      # assert, so this step pins the permission set instead of forbidding it.
-      - name: Assert INTERNET is present, and the set is otherwise as expected
+      # Ride maps render the local route polylines without downloading tiles.
+      # Keep the no-network invariant enforced in the merged APK.
+      - name: Assert INTERNET is absent
         run: |
           set -euo pipefail
           AAPT2=$(ls -d "$ANDROID_HOME"/build-tools/*/aapt2 | sort -V | tail -1)
           APK=app/build/outputs/apk/debug/app-debug.apk
           "$AAPT2" dump permissions "$APK" | tee permissions.txt
-          grep -q 'android.permission.INTERNET' permissions.txt || {
-            echo "::error::INTERNET permission missing — embedded maps need it"; exit 1; }
-          echo "OK: INTERNET permission present"
+          if grep -q 'android.permission.INTERNET' permissions.txt; then
+            echo "::error::INTERNET permission present — app must remain offline"
+            exit 1
+          fi
+          echo "OK: INTERNET permission absent"
 
       - name: Verify the BLE and notification permissions are present
         run: |
@@ -129,11 +127,8 @@ jobs:
           echo "OK: expected BLE permissions present"
 
       # Caller ID is implemented, so READ_CALL_LOG, READ_CONTACTS and
-      # READ_PHONE_STATE are requested deliberately. Note the trust boundary
-      # changed when INTERNET was added for embedded maps: contacts may not
-      # leave the device, and the enforcement is that network call sites live
-      # only in dev.tvsopen.nav.maps (see the manifest comment). Read that
-      # note before removing any of these three.
+      # READ_PHONE_STATE are requested deliberately. INTERNET is absent, so
+      # these values cannot leave through an app network connection.
       #
       # ANSWER_PHONE_CALLS and CALL_PHONE are still absent and must stay so:
       # both are hard restricted to the default dialer, so a third-party app can
@@ -179,7 +174,7 @@ jobs:
             access so navigation mirroring can read turn-by-turn from your maps
             app.
 
-            This build declares `INTERNET` — verified in CI against the merged
-            manifest. It is used only for OpenStreetMap tiles, place search and
+            This build has no `INTERNET` permission — verified in CI against
+            the merged manifest. It is used only for OpenStreetMap tiles, place search and
             routing (see docs/MAPS.md). The app still talks to no TVS server,
             needs no account, and uploads no telemetry.

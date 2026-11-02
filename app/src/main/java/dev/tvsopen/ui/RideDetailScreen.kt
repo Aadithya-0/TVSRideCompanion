@@ -35,7 +35,6 @@ import dev.tvsopen.session.Ride
 import dev.tvsopen.session.TrackPoint
 import dev.tvsopen.ui.theme.NumberStyle
 import org.osmdroid.config.Configuration
-import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Polyline
@@ -44,7 +43,8 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * Full ride detail: summary stats card + OSMDroid map with speed-band coloured polylines.
+ * Full ride detail: summary stats card + offline OSMDroid view with speed-band
+ * coloured polylines.
  *
  * Speed bands:
  *   0–30 km/h → blue
@@ -244,7 +244,9 @@ private fun buildMapView(context: Context, points: List<TrackPoint>): MapView {
     Configuration.getInstance().userAgentValue = context.packageName
 
     val map = MapView(context).apply {
-        setTileSource(TileSourceFactory.MAPNIK)
+        // Keep route rendering fully on-device. Enabling tile downloads would
+        // disclose the viewed ride area to a third-party tile server.
+        setUseDataConnection(false)
         setMultiTouchControls(true)
         isTilesScaledToDpi = true
     }
