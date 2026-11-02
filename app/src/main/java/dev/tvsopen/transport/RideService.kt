@@ -19,6 +19,7 @@ import dev.tvsopen.protocol.DriverRegistry
 import dev.tvsopen.protocol.NtorqDriver
 import dev.tvsopen.protocol.ProtocolDriver
 import dev.tvsopen.protocol.VehicleModel
+import dev.tvsopen.session.RideLog
 import dev.tvsopen.session.Session
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -42,6 +43,8 @@ class RideService : android.app.Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var bridge: NavigationBridge? = null
     private var ble: ScooterBleService? = null
+    private var locationTracker: LocationTracker? = null
+    private var tripActive = false
     /** Parents the per-connection collectors so a reconnect or disconnect
      * cancels them. Without this every connect() added three more collectors
      * on the same flows, and a stale one could restart the *old* bridge's
@@ -136,6 +139,9 @@ class RideService : android.app.Service() {
             ACTION_START_NAV -> bridge?.startNavigation()
             ACTION_STOP_NAV -> bridge?.stopNavigation()
             ACTION_UPDATE_RIDER_NAME -> sendRiderNameIfConnected()
+            ACTION_START_TRIP -> startTrip()
+            ACTION_PAUSE_TRIP -> pauseTrip()
+            ACTION_END_TRIP -> endTrip()
             ACTION_DISCONNECT -> {
                 teardown()
                 stopSelf()
@@ -404,6 +410,46 @@ class RideService : android.app.Service() {
         }
     }
 
+    private fun startTrip() {
+        if (tripActive) return
+        tripActive = true
+        Session.attachRideLog(applicationContext)
+        Session.startManualTrip()
+        val tracker = locationTracker ?: LocationTracker(applicationContext).also { locationTracker = it }
+        tracker.startTracking()
+        scope.launch {
+            tracker.lastLocation.collect { loc ->
+                if (loc != null && tripActive) {
+                    val tel = Session.telemetry.value
+                    Session.addTripPoint(
+                        lat = loc.latitude,
+                        lon = loc.longitude,
+                        speedKmh = tel.speedKmh ?: 0,
+                        liveRpm = tel.engineRpm ?: 0,
+                    )
+                }
+            }
+        }
+        notify("Trip started")
+        Log.i(TAG, "manual trip started")
+    }
+
+    private fun pauseTrip() {
+        if (!tripActive) return
+        locationTracker?.stopTracking()
+        notify("Trip paused")
+        Log.i(TAG, "manual trip paused")
+    }
+
+    private fun endTrip() {
+        if (!tripActive) return
+        tripActive = false
+        locationTracker?.stopTracking()
+        Session.endManualTrip()
+        notify("Trip saved")
+        Log.i(TAG, "manual trip ended")
+    }
+
     private fun teardown() {
         linkJob?.cancel()
         linkJob = null
@@ -497,6 +543,9 @@ class RideService : android.app.Service() {
         const val ACTION_STOP_NAV = "dev.tvsopen.STOP_NAV"
         const val ACTION_UPDATE_RIDER_NAME = "dev.tvsopen.UPDATE_RIDER_NAME"
         const val ACTION_DISCONNECT = "dev.tvsopen.DISCONNECT"
+        const val ACTION_START_TRIP = "dev.tvsopen.START_TRIP"
+        const val ACTION_PAUSE_TRIP = "dev.tvsopen.PAUSE_TRIP"
+        const val ACTION_END_TRIP = "dev.tvsopen.END_TRIP"
 
         const val EXTRA_ADDRESS = "address"
         const val EXTRA_MODEL = "model"

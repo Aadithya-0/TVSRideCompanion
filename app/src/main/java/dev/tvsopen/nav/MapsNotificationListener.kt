@@ -45,12 +45,24 @@ data class NavInstruction(
      * zero-padded and the `0xFF` terminator stays at index 19, because that is
      * the frame shape the cluster expects. Only the character count changed.
      */
+    /**
+     * Best single line for the cluster display.
+     *
+     * For vehicles with enough display characters (Raider etc.) the full
+     * sentence is used directly with an ASCII arrow prefix — no short codes.
+     * Short codes are only applied when [maxChars] is tight (Ntorq 10/12).
+     *
+     * The [tick] advances the rolling window on each bridge send so overlong
+     * text scrolls into view rather than being clipped.
+     */
     fun displayLine(maxChars: Int = RowChars.NTORQ, tick: Int = 0): String {
         val combined = listOf(title, street)
             .firstOrNull { it.isNotBlank() } ?: "Navigating"
-        val compressed = NavShortCodes.compress(combined)
         val arrow = NavShortCodes.asciiArrow(pictogram)
-        val full = if (arrow.isNotEmpty()) "$arrow $compressed" else compressed
+        // For wider displays (>= 17 chars like Raider) skip compression.
+        val body = if (maxChars >= RowChars.JUPITER) combined
+                   else NavShortCodes.compress(combined)
+        val full = if (arrow.isNotEmpty()) "$arrow $body" else body
         return RollingText.window(full, maxChars, tick)
     }
 

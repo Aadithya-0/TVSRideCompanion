@@ -175,6 +175,26 @@ object Session {
 
     fun onParked(info: ParkedInfo) { _parked.value = info }
 
+    fun startManualTrip() {
+        val log = rideLog ?: return
+        log.start()
+        _rides.value = log.rides.value
+    }
+
+    fun endManualTrip() {
+        val log = rideLog ?: return
+        log.finish()
+        _rides.value = log.rides.value
+        _totalRides.value = log.totalRides
+        _totalRideDistanceKm.value = log.totalDistanceKm
+    }
+
+    fun addTripPoint(lat: Double, lon: Double, speedKmh: Int, liveRpm: Int) {
+        val log = rideLog ?: return
+        log.addPoint(lat, lon, speedKmh, liveRpm)
+        _rides.value = log.rides.value
+    }
+
     fun reset() {
         _telemetry.value = Telemetry()
         _hud.value = HudState()
@@ -194,9 +214,11 @@ object Session {
         if (isConnected && !wasConnected) {
             _telemetry.value = _telemetry.value.copy(odometerAtConnectKm = null)
             rideLog?.start()
+            _rides.value = rideLog?.rides?.value ?: _rides.value
         }
         if (!isConnected && wasConnected) {
             rideLog?.finish()
+            _rides.value = rideLog?.rides?.value ?: _rides.value
             _totalRides.value = rideLog?.totalRides ?: _totalRides.value
             _totalRideDistanceKm.value = rideLog?.totalDistanceKm ?: _totalRideDistanceKm.value
         }

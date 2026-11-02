@@ -13,6 +13,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Article
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material3.Icon
@@ -186,44 +187,17 @@ class MainActivity : AppCompatActivity() {
     ) {
         var tab by rememberSaveable { mutableStateOf(0) }
         var findMy by rememberSaveable { mutableStateOf(false) }
-        // On by default: mirroring is the app's reason to exist.
-        //
-        // It was false, so a rider who installed this, granted notification
-        // access, started a route and looked at the cluster saw nothing — with no
-        // indication that a switch existed to turn on. Asking for a feature
-        // twice is the wrong default when enabling it is free: the bridge does
-        // nothing until a maps app actually posts a navigation notification,
-        // and there is no cloud, account or network call involved.
-        //
-        // The toggle stays, because someone may want the cluster left alone.
         var navMirroring by rememberSaveable {
             mutableStateOf(RidePrefs.load(this@MainActivity).navigationMirroring)
         }
+
+        // Selected ride for detail view (null = show list)
+        var selectedRide by remember { mutableStateOf<dev.tvsopen.session.Ride?>(null) }
 
         val telemetry by Session.telemetry.collectAsStateWithLifecycle()
         val hud by Session.hud.collectAsStateWithLifecycle()
         val connection by Session.connection.collectAsStateWithLifecycle()
 
-        // Everything the UI shows comes from the process-scoped Session, which
-        // the BLE service and the notification listener both write into. The
-        // activity only observes.
-
-        // Start the mirror once a connection exists, because it defaults on.
-        //
-        // Without this the default was cosmetic: the switch showed "on" while
-        // nothing had been sent to the service, so the cluster showed no turn
-        // instructions and there was no reason visible for it.
-        //
-        // Keyed on the connection state, so it fires on the transition to
-        // CONNECTED and not on every recomposition. `startNavigation` returns
-        // early if the bridge is already running, and the action is idempotent.
-        // Deliberately not fired while disconnected — asking the service to start
-        // a bridge it cannot write to would log a dropped write per tick, which is
-        // exactly the spam that was just fixed.
-        //
-        // Declared *after* `connection` on purpose: an earlier version sat above
-        // the collect calls and would not compile, because a local val cannot be
-        // read before its declaration.
         LaunchedEffect(connection.state, navMirroring) {
             if (navMirroring && connection.state == ConnectionState.CONNECTED) {
                 onNavMirrorChange(RideService.ACTION_START_NAV)
@@ -237,10 +211,6 @@ class MainActivity : AppCompatActivity() {
         TVSRideTheme(mode = ThemePrefs.mode, darkTheme = isSystemInDarkTheme()) {
             Scaffold(
                 bottomBar = {
-                    // Hidden while the scanner is open. The scan screen is a
-                    // full-screen takeover with its own back arrow, so a live
-                    // nav bar underneath was an affordance that lied: tapping a
-                    // tab highlighted it and left you exactly where you were.
                     if (!scanning.value) NavigationBar {
                         NavigationBarItem(
                             selected = tab == 0,
@@ -250,19 +220,25 @@ class MainActivity : AppCompatActivity() {
                         )
                         NavigationBarItem(
                             selected = tab == 1,
-                            onClick = { tab = 1 },
-                            icon = { Icon(Icons.Filled.MoreHoriz, contentDescription = "More") },
-                            label = { Text("More") },
+                            onClick = { tab = 1; selectedRide = null },
+                            icon = { Icon(Icons.Filled.History, contentDescription = "Ride History") },
+                            label = { Text("Rides") },
                         )
                         NavigationBarItem(
                             selected = tab == 2,
                             onClick = { tab = 2 },
-                            icon = { Icon(Icons.Filled.Speed, contentDescription = "Overview") },
-                            label = { Text("Overview") },
+                            icon = { Icon(Icons.Filled.MoreHoriz, contentDescription = "More") },
+                            label = { Text("More") },
                         )
                         NavigationBarItem(
                             selected = tab == 3,
                             onClick = { tab = 3 },
+                            icon = { Icon(Icons.Filled.Speed, contentDescription = "Overview") },
+                            label = { Text("Overview") },
+                        )
+                        NavigationBarItem(
+                            selected = tab == 4,
+                            onClick = { tab = 4 },
                             icon = { Icon(Icons.AutoMirrored.Filled.Article, contentDescription = "Log") },
                             label = { Text("Log") },
                         )
@@ -271,9 +247,6 @@ class MainActivity : AppCompatActivity() {
             ) { padding ->
                 androidx.compose.foundation.layout.Box(Modifier.padding(padding)) {
                     if (scanning.value) {
-                        // Full-screen takeover rather than a dialog: the scan has
-                        // a filter switch, a list and a model picker, and a
-                        // dialog would either clip or cover the nav bar.
                         ScanScreen(
                             scanner = scanner,
                             pairing = pairing,
@@ -288,8 +261,8 @@ class MainActivity : AppCompatActivity() {
                             },
                             onBack = { scanning.value = false },
                         )
-                    } else if (tab == 0) {
-                        HomeScreen(
+                    } else when (tab) {
+                        0 -> HomeScreen(
                             telemetry = telemetry,
                             hud = hud,
                             connection = connection,
@@ -299,10 +272,6 @@ class MainActivity : AppCompatActivity() {
                             navMirroring = navMirroring,
                             onFindMyChange = { on ->
                                 findMy = on
-                                // Off used to send ACTION_FIND_MY too, so the
-                                // rider could never switch it back off from the
-                                // UI — the toggle started the action regardless
-                                // of its new value.
                                 onFindMyChange(
                                     if (on) RideService.ACTION_FIND_MY
                                     else RideService.ACTION_STOP_FIND_MY,
@@ -317,34 +286,35 @@ class MainActivity : AppCompatActivity() {
                                 )
                             },
                             onRideModeChange = { on ->
-                                // No local copy to assign: `rideMode` above is
-                                // the collected Session flow, so pushing into
-                                // Session and the prefs is the whole update.
-                                // `this@MainActivity` because inside the Scaffold
-                                // content lambda a bare `this` is the BoxScope.
                                 RidePrefs.load(this@MainActivity).updateRideMode(on)
                                 Session.setRideMode(on)
                             },
-                            onOpenOverview = { tab = 2 },
-                            onOpenParked = { tab = 2 },
+                            onOpenOverview = { tab = 3 },
+                            onOpenParked = { tab = 3 },
+                            onStartTrip = { tab = 1; selectedRide = null },
                             hasNotificationAccess = hasNotificationAccess,
                             onOpenNotificationAccess = { openNotificationAccess() },
-                            // The Connect card now opens the scanner. It used to
-                            // send ACTION_CONNECT with no address, which the
-                            // service logged and ignored — the only reason a
-                            // connection could never start.
                             onConnect = { openScanner() },
                         )
-                    } else if (tab == 1) {
-                        MoreScreen(
+                        1 -> {
+                            // Attach ride log so rides are loaded
+                            Session.attachRideLog(this@MainActivity)
+                            if (selectedRide != null) {
+                                RideDetailScreen(
+                                    ride = selectedRide!!,
+                                    onBack = { selectedRide = null },
+                                )
+                            } else {
+                                RideHistoryScreen(
+                                    onRideClick = { selectedRide = it },
+                                )
+                            }
+                        }
+                        2 -> MoreScreen(
                             connection = connection,
                             riderName = RidePrefs.load(this@MainActivity).riderName,
                             onRiderNameChange = { name ->
                                 RidePrefs.load(this@MainActivity).riderName = name
-                                // Gate the send, not the save: without BLE
-                                // permission send() would toast about Bluetooth
-                                // for what is only a name being stored. The
-                                // service sends it on the next connection anyway.
                                 if (hasBlePermission()) {
                                     send(RideService.ACTION_UPDATE_RIDER_NAME)
                                 }
@@ -354,14 +324,8 @@ class MainActivity : AppCompatActivity() {
                             onScan = onScan,
                             onDisconnect = onDisconnect,
                         )
-                    } else if (tab == 2) {
-                        // Must match the nav bar order: Home, More, Overview,
-                        // Log. These two destinations were swapped, so tapping
-                        // Overview rendered the log and tapping Log rendered
-                        // the dashboard.
-                        OverviewScreen(telemetry = telemetry)
-                    } else {
-                        LogScreen()
+                        3 -> OverviewScreen(telemetry = telemetry)
+                        else -> LogScreen()
                     }
                 }
             }
