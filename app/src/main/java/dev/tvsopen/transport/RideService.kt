@@ -14,7 +14,6 @@ import dev.tvsopen.R
 import dev.tvsopen.log.Log
 import dev.tvsopen.nav.NavInstruction
 import dev.tvsopen.nav.NavigationBridge
-import dev.tvsopen.nav.ManeuverResolver
 import dev.tvsopen.nav.RouteCodec
 import dev.tvsopen.nav.RouteStatus
 import dev.tvsopen.nav.RouteTracker
@@ -22,6 +21,7 @@ import dev.tvsopen.prefs.RidePrefs
 import dev.tvsopen.protocol.Command
 import dev.tvsopen.protocol.DashState
 import dev.tvsopen.protocol.DriverRegistry
+import dev.tvsopen.protocol.ManeuverResolver
 import dev.tvsopen.protocol.NtorqDriver
 import dev.tvsopen.protocol.ProtocolDriver
 import dev.tvsopen.protocol.VehicleModel
