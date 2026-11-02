@@ -490,8 +490,14 @@ private fun NavigationStrip(hud: HudState) {
             // used to say "-1 m" while the dash said 0.
             val distance = hud.distanceMeters
             Text(
-                if (distance >= 0) "$distance m · ${hud.etaMinutes} min"
-                else "${hud.etaMinutes} min to arrival",
+                if (distance >= 0) {
+                    if (hud.etaMinutes > 0) "$distance m · ${hud.etaMinutes} min"
+                    else "$distance m · arrival time"
+                } else if (hud.etaMinutes > 0) {
+                    "${hud.etaMinutes} min to arrival"
+                } else {
+                    "Arrival time provided by Maps"
+                },
                 style = NumberStyle,
                 color = MaterialTheme.colorScheme.onPrimaryContainer,
             )

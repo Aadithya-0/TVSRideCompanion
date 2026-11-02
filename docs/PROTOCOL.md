@@ -289,7 +289,7 @@ The challenge pair (0xF1 / 0xF2) builds from `BlePacketsProvider.byteArrayForUnL
 | 0x15 | SPEEDOMETER_DATA_5A_15_FRAME        | Second cluster variant               |
 | 0x16 | *(unmapped)*                        | **Observed constantly, layout unknown** |
 | 0x18 | SPEEDOMETER_DATA_5A_18_FRAME        | Engine diagnostics                   |
-| 0x19 | SPEEDOMETER_DATA_5A_19_FRAME        | Economy / distance to empty (unseen) |
+| 0x19 | SPEEDOMETER_DATA_5A_19_FRAME        | Economy / distance to empty (zero placeholders are ignored) |
 | 0x23 | *(unmapped)*                        | —                                    |
 | 0x29 | WIFI_PASSWORD_5A_29_FRAME           | Wi-Fi / SmartXonnect config          |
 | 0x37 | SPEEDOMETER_DATA_5A_37_FRAME        | Calibration-response / ACK class     |

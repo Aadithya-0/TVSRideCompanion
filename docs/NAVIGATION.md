@@ -175,6 +175,14 @@ not just a byte offset we can decode.
 
 ### The display is asymmetric: 10 characters on line 1, 12 on line 2
 
+Raider wide-display output is handled separately from the Ntorq rows. Raider
+uses the full 17-character navigation payload for readable instructions such as
+`Turn left after 350m`; it does not use the Ntorq short-code compressor. The
+resolver also gives precedence to specific roundabout exits, compass headings,
+merge directions, and straight-ahead instructions. The pictogram byte table is
+still hardware-confidence dependent, so the text remains the authoritative
+fallback.
+
 The Jupiter reference implementation targets a single 17-character row, and the
 protocol's text payload is 17 bytes. Neither carries over. The Ntorq 125 manual
 renders every navigation string the cluster can produce, and the **longest

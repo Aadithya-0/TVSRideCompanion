@@ -97,4 +97,3 @@ class LocationTracker(private val context: Context) {
         private const val TAG = "LocationTracker"
     }
 }
-

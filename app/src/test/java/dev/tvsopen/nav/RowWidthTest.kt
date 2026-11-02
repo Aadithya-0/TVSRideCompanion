@@ -243,4 +243,18 @@ class RowWidthTest {
         val loop = full + " - "
         assertEquals(head, step.displayLine(tick = loop.length))
     }
+
+    @Test
+    fun `Raider uses a wide row for full turn sentences`() {
+        val step = NavInstruction(
+            title = "Turn left after 350m",
+            street = "",
+            distanceMeters = 350,
+            pictogram = 0,
+            provider = "test",
+        )
+        val wide = step.displayLine(maxChars = RowChars.RAIDER)
+        assertTrue(wide.trim().startsWith("<- Turn left"))
+        assertEquals(RowChars.RAIDER, wide.length)
+    }
 }

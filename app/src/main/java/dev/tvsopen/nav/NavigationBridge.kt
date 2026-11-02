@@ -12,6 +12,7 @@ import dev.tvsopen.protocol.OutboundId
 import dev.tvsopen.protocol.PacketBuilder
 import dev.tvsopen.protocol.Pictograms
 import dev.tvsopen.protocol.ProtocolDriver
+import dev.tvsopen.protocol.VehicleModel
 import dev.tvsopen.transport.ScooterBleService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -71,10 +72,20 @@ class NavigationBridge(
     var textRowChars: Int = RowChars.NTORQ
 
     /** Ntorq second-line width, which is where the street/distance row goes. */
-    var secondTextRowChars: Int = RowChars.NTORQ_LINE_2
+    var secondTextRowChars: Int =
+        if (driver.model == VehicleModel.RAIDER_125 || driver.model == VehicleModel.RAIDER_180) {
+            RowChars.RAIDER
+        } else {
+            RowChars.NTORQ_LINE_2
+        }
 
     /** Ntorq first-line width, which is where the maneuver goes. */
-    var firstTextRowChars: Int = RowChars.NTORQ_LINE_1
+    var firstTextRowChars: Int =
+        if (driver.model == VehicleModel.RAIDER_125 || driver.model == VehicleModel.RAIDER_180) {
+            RowChars.RAIDER
+        } else {
+            RowChars.NTORQ_LINE_1
+        }
 
     var controlIntervalMs: Long = 1500
     var textSwapIntervalMs: Long = 3000

@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.asStateFlow
  */
 data class Telemetry(
     val speedKmh: Int? = null,            // SM1 idx 2
+    val gpsSpeedKmh: Int? = null,         // Native location speed when available
     val odometerKm: Double? = null,       // SM1 idx 3..5, /10
     val fuelBars: Int? = null,            // SM1 idx 6, low nibble
     val averageSpeedKmh: Int? = null,     // SM1 idx 7
@@ -195,6 +196,10 @@ object Session {
         _rides.value = log.rides.value
     }
 
+    fun updateGpsSpeed(speedKmh: Int?) {
+        _telemetry.value = _telemetry.value.copy(gpsSpeedKmh = speedKmh)
+    }
+
     fun reset() {
         _telemetry.value = Telemetry()
         _hud.value = HudState()
@@ -297,7 +302,10 @@ object Session {
                     ?: cur.avgEconomyKmpl,
                 instantEconomyKmpl = frame.field(Field.INSTANTANEOUS_FUEL_ECONOMY)?.toInt()
                     ?: cur.instantEconomyKmpl,
+                // Some Raider firmware emits a zero placeholder between valid
+                // range updates. Do not erase a known value with that sentinel.
                 distanceToEmptyKm = frame.field(Field.DISTANCE_TO_EMPTY)?.toInt()
+                    ?.takeIf { it > 0 }
                     ?: cur.distanceToEmptyKm,
                 lastFrameAt = now,
             )

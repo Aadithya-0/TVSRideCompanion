@@ -126,12 +126,17 @@ fun RideDetailScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Text(
-                        "No GPS track recorded",
+                        if (ride.distanceKm == 0.0) "No GPS fix recorded"
+                        else "No GPS track recorded",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Text(
-                        "Grant location permission to record routes",
+                        if (ride.distanceKm == 0.0) {
+                            "Telemetry and stationary ride stats were saved"
+                        } else {
+                            "Grant location permission to record routes"
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

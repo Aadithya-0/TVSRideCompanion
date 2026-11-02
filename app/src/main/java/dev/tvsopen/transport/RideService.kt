@@ -4,10 +4,12 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.content.pm.ServiceInfo
 import android.content.Context
 import android.content.Intent
 import android.os.Build
 import androidx.core.app.NotificationCompat
+import androidx.core.app.ServiceCompat
 import dev.tvsopen.R
 import dev.tvsopen.log.Log
 import dev.tvsopen.nav.NavInstruction
@@ -102,7 +104,12 @@ class RideService : android.app.Service() {
         // RemoteServiceException and cannot be caught here — that is why
         // `buildNotification` creates the channel itself.
         try {
-            startForeground(NOTIF_ID, buildNotification("Starting…"))
+            ServiceCompat.startForeground(
+                this,
+                NOTIF_ID,
+                buildNotification("Starting…"),
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE,
+            )
         } catch (e: SecurityException) {
             Log.e(TAG, "cannot enter foreground: ${e.message}")
             Log.e(TAG, "BLUETOOTH_CONNECT/SCAN not granted; stopping rather than idling")
@@ -119,8 +126,27 @@ class RideService : android.app.Service() {
 
     /** Called once the activity has the runtime BLE permissions. */
     private fun enterForeground() {
-        runCatching { startForeground(NOTIF_ID, buildNotification("Connecting…")) }
+        runCatching {
+            ServiceCompat.startForeground(
+                this,
+                NOTIF_ID,
+                buildNotification("Connecting…"),
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE,
+            )
+        }
             .onFailure { Log.w(TAG, "foreground still refused: ${it.message}") }
+    }
+
+    private fun enterLocationForeground() {
+        runCatching {
+            ServiceCompat.startForeground(
+                this,
+                NOTIF_ID,
+                buildNotification("Trip recording…"),
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE or
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION,
+            )
+        }.onFailure { Log.e(TAG, "location foreground mode refused: ${it.message}") }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -214,7 +240,7 @@ class RideService : android.app.Service() {
         // Race was added, because a miss here means the generic profile and a
         // dashboard full of `—` rather than an error. One source of truth.
         val driver = if (model.sharesNtorqProtocol()) {
-            NtorqDriver()
+            NtorqDriver(model)
         } else {
             DriverRegistry.forModel(model)
         }
@@ -426,15 +452,19 @@ class RideService : android.app.Service() {
         Session.startManualTrip()
         val tracker = locationTracker ?: LocationTracker(applicationContext).also { locationTracker = it }
         tracker.startTracking()
+        enterLocationForeground()
         tripLocationJob?.cancel()
         tripLocationJob = scope.launch {
             tracker.lastLocation.collect { loc ->
                 if (loc != null && tripActive) {
                     val tel = Session.telemetry.value
+                    val gpsSpeed = loc.takeIf { it.hasSpeed() }?.speed
+                        ?.times(3.6f)?.toInt()?.coerceAtLeast(0)
+                    Session.updateGpsSpeed(gpsSpeed)
                     Session.addTripPoint(
                         lat = loc.latitude,
                         lon = loc.longitude,
-                        speedKmh = tel.speedKmh ?: 0,
+                        speedKmh = gpsSpeed ?: tel.speedKmh ?: 0,
                         liveRpm = tel.engineRpm ?: 0,
                     )
                 }

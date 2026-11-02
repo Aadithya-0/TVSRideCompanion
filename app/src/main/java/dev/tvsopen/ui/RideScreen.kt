@@ -105,7 +105,7 @@ fun RideScreen(
             TelemetryTile(
                 modifier = Modifier.weight(1f),
                 label = "Speed",
-                value = telemetry.speedKmh?.toString() ?: "—",
+                value = (telemetry.gpsSpeedKmh ?: telemetry.speedKmh)?.toString() ?: "—",
                 unit = "km/h",
             )
             TelemetryTile(

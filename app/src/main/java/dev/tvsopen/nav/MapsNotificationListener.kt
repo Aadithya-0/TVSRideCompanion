@@ -276,4 +276,7 @@ object RowChars {
      * how the frame is laid out.
      */
     const val JUPITER = 17
+
+    /** Raider's wide display accepts the full navigation payload width. */
+    const val RAIDER = 17
 }

@@ -154,6 +154,12 @@ class NavParsingTest {
         assertEquals(0, NavParsing.extractEtaMinutes("", "Example Road"))
     }
 
+    @Test
+    fun `arrival clock does not require a fabricated zero minute duration`() {
+        val p = NavParsing.parse("Arrive", "Example Road", "", "9:00 PM", ninePm)
+        assertEquals(0, p.etaMinutes)
+    }
+
     // --- Shape tolerance -----------------------------------------------------
 
     @Test
