@@ -89,9 +89,9 @@ fun RideScreen(
             }
         }
         Text(
-            if (!tripRunning) "Tap Start Trip to begin recording"
-            else if (tripPaused) "Paused — GPS recording suspended"
-            else "Recording trip…",
+            if (!tripRunning) "Ready to record a ride"
+            else if (tripPaused) "Paused · location recording suspended"
+            else "Recording ride",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -224,9 +224,9 @@ fun RideScreen(
 
         Spacer(Modifier.height(8.dp))
         Text(
-            if (!tripRunning) "▶ Start   ⏸ Pause   ■ Stop"
-            else if (tripPaused) "▶ Resume   ■ Stop"
-            else "⏸ Pause   ■ Stop",
+            if (!tripRunning) "Start      Pause      Stop"
+            else if (tripPaused) "Resume      Stop"
+            else "Pause      Stop",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.align(Alignment.CenterHorizontally),

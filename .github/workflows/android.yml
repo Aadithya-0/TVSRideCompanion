@@ -100,19 +100,20 @@ jobs:
       - name: Unit tests and build
         run: ./gradlew :app:testDebugUnitTest :app:assembleDebug --stacktrace
 
-      # Ride maps render the local route polylines without downloading tiles.
-      # Keep the no-network invariant enforced in the merged APK.
-      - name: Assert INTERNET is absent
+      # Direct navigation and map previews are opt-in network features. Keep
+      # the capability explicit in the merged APK rather than relying on a
+      # transitive dependency.
+      - name: Assert INTERNET is present for direct navigation
         run: |
           set -euo pipefail
           AAPT2=$(ls -d "$ANDROID_HOME"/build-tools/*/aapt2 | sort -V | tail -1)
           APK=app/build/outputs/apk/debug/app-debug.apk
           "$AAPT2" dump permissions "$APK" | tee permissions.txt
-          if grep -q 'android.permission.INTERNET' permissions.txt; then
-            echo "::error::INTERNET permission present — app must remain offline"
+          grep -q 'android.permission.INTERNET' permissions.txt || {
+            echo "::error::INTERNET permission missing — direct navigation requires it"
             exit 1
-          fi
-          echo "OK: INTERNET permission absent"
+          }
+          echo "OK: INTERNET permission present"
 
       - name: Verify the BLE and notification permissions are present
         run: |
@@ -127,8 +128,9 @@ jobs:
           echo "OK: expected BLE permissions present"
 
       # Caller ID is implemented, so READ_CALL_LOG, READ_CONTACTS and
-      # READ_PHONE_STATE are requested deliberately. INTERNET is absent, so
-      # these values cannot leave through an app network connection.
+      # READ_PHONE_STATE are requested deliberately. Caller-ID data is still
+      # only used for the cluster display; direct-navigation networking is
+      # limited to explicit route/preview requests.
       #
       # ANSWER_PHONE_CALLS and CALL_PHONE are still absent and must stay so:
       # both are hard restricted to the default dialer, so a third-party app can
@@ -174,7 +176,6 @@ jobs:
             access so navigation mirroring can read turn-by-turn from your maps
             app.
 
-            This build has no `INTERNET` permission — verified in CI against
-            the merged manifest. It is used only for OpenStreetMap tiles, place search and
-            routing (see docs/MAPS.md). The app still talks to no TVS server,
-            needs no account, and uploads no telemetry.
+            This build uses `INTERNET` only for explicit direct-navigation
+            route and map-preview requests (see docs/MAPS.md). It still talks
+            to no TVS server, needs no account, and uploads no telemetry.

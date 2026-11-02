@@ -42,25 +42,25 @@ import androidx.compose.ui.unit.sp
  *     identifiers. See `research/SOURCES.md`.
  */
 private val LightColors = lightColorScheme(
-    primary = Color(0xFF0052FF),
+    primary = Color(0xFF426A4B),
     onPrimary = Color.White,
-    primaryContainer = Color(0xFFEEF0F3),
+    primaryContainer = Color(0xFFE7EEE8),
     onPrimaryContainer = Color(0xFF0A0B0D),
-    secondary = Color(0xFF5B616E),
+    secondary = Color(0xFF59635B),
     onSecondary = Color.White,
-    secondaryContainer = Color(0xFFEEF0F3),
+    secondaryContainer = Color(0xFFE7EEE8),
     onSecondaryContainer = Color(0xFF0A0B0D),
-    tertiary = Color(0xFF003ECC),
-    tertiaryContainer = Color(0xFFEEF0F3),
+    tertiary = Color(0xFF426A4B),
+    tertiaryContainer = Color(0xFFE7EEE8),
     onTertiaryContainer = Color(0xFF0A0B0D),
     error = Color(0xFFCF202F),
     onError = Color.White,
-    background = Color(0xFFFFFFFF),
-    surface = Color(0xFFFFFFFF),
+    background = Color(0xFFF7F8F5),
+    surface = Color(0xFFF7F8F5),
     onSurface = Color(0xFF0A0B0D),
-    surfaceVariant = Color(0xFFF7F7F7),
-    onSurfaceVariant = Color(0xFF5B616E),
-    outline = Color(0xFFDEE1E6),
+    surfaceVariant = Color(0xFFEDF1ED),
+    onSurfaceVariant = Color(0xFF59635B),
+    outline = Color(0xFFD8DFD9),
 )
 
 /**
@@ -88,13 +88,13 @@ data class TilePalette(
 )
 
 private val LightTiles = TilePalette(
-    largeLeft = Color(0xFFF7F7F7),
-    largeRight = Color(0xFFF7F7F7),
-    small1 = Color(0xFFF7F7F7),
-    small2 = Color(0xFFF7F7F7),
-    small3 = Color(0xFFF7F7F7),
-    neutral = Color(0xFFF7F7F7),
-    accent = Color(0xFFF7F7F7),
+    largeLeft = Color(0xFFEDF1ED),
+    largeRight = Color(0xFFEDF1ED),
+    small1 = Color(0xFFEDF1ED),
+    small2 = Color(0xFFEDF1ED),
+    small3 = Color(0xFFEDF1ED),
+    neutral = Color(0xFFEDF1ED),
+    accent = Color(0xFFEDF1ED),
     connected = Color(0xFF05B169),   // status dot
 )
 
@@ -127,7 +127,7 @@ fun AppSwitch(checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
         checked = checked,
         onCheckedChange = onCheckedChange,
         colors = SwitchDefaults.colors(
-            checkedTrackColor = Color(0xFF0052FF),
+            checkedTrackColor = Color(0xFF426A4B),
             checkedThumbColor = Color.White,
             checkedBorderColor = Color.Transparent,
             uncheckedTrackColor = if (dark) Color(0xFF5B616E) else Color(0xFFA8ACB3),
@@ -151,7 +151,7 @@ private val AppTypography = Typography(
  * System monospace: the licensed brand mono has an Inter/JetBrains substitute
  * on the web, but this app ships no fonts and requests no network, so the
  * platform face is the honest stand-in. Applied to telemetry readouts only,
- * never to prose.
+ * never to prose; it does not depend on network fonts.
  */
 val NumberStyle = TextStyle(
     fontFamily = FontFamily.Monospace,
@@ -165,24 +165,24 @@ val NumberStyle = TextStyle(
  * which is the system's own dark-hero price-cell treatment.
  */
 private val DarkColors = darkColorScheme(
-    primary = Color(0xFF0052FF),
+    primary = Color(0xFFA8C9AF),
     onPrimary = Color.White,
-    primaryContainer = Color(0xFF16181C),
+    primaryContainer = Color(0xFF1B211D),
     onPrimaryContainer = Color(0xFFFFFFFF),
-    secondary = Color(0xFFA8ACB3),
-    secondaryContainer = Color(0xFF16181C),
+    secondary = Color(0xFFB4BDB5),
+    secondaryContainer = Color(0xFF1B211D),
     onSecondaryContainer = Color(0xFFFFFFFF),
-    tertiary = Color(0xFFA8B8CC),
-    tertiaryContainer = Color(0xFF16181C),
+    tertiary = Color(0xFFA8C9AF),
+    tertiaryContainer = Color(0xFF1B211D),
     onTertiaryContainer = Color(0xFFFFFFFF),
     error = Color(0xFFCF202F),
     onError = Color.White,
-    background = Color(0xFF0A0B0D),
-    surface = Color(0xFF0A0B0D),
+    background = Color(0xFF0F1210),
+    surface = Color(0xFF0F1210),
     onSurface = Color.White,
-    surfaceVariant = Color(0xFF16181C),
-    onSurfaceVariant = Color(0xFFA8ACB3),
-    outline = Color(0xFF5B616E),
+    surfaceVariant = Color(0xFF1B211D),
+    onSurfaceVariant = Color(0xFFB4BDB5),
+    outline = Color(0xFF485149),
 )
 
 /**

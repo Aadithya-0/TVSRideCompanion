@@ -14,6 +14,10 @@ import dev.tvsopen.R
 import dev.tvsopen.log.Log
 import dev.tvsopen.nav.NavInstruction
 import dev.tvsopen.nav.NavigationBridge
+import dev.tvsopen.nav.ManeuverResolver
+import dev.tvsopen.nav.RouteCodec
+import dev.tvsopen.nav.RouteStatus
+import dev.tvsopen.nav.RouteTracker
 import dev.tvsopen.prefs.RidePrefs
 import dev.tvsopen.protocol.Command
 import dev.tvsopen.protocol.DashState
@@ -49,6 +53,8 @@ class RideService : android.app.Service() {
     private var tripActive = false
     private var tripPaused = false
     private var tripLocationJob: Job? = null
+    private var routeGuidanceJob: Job? = null
+    private var routeOffRouteNotified = false
     /** Parents the per-connection collectors so a reconnect or disconnect
      * cancels them. Without this every connect() added three more collectors
      * on the same flows, and a stale one could restart the *old* bridge's
@@ -166,6 +172,8 @@ class RideService : android.app.Service() {
             ACTION_STOP_FIND_MY -> bridge?.setFindMyScooter(false)
             ACTION_START_NAV -> bridge?.startNavigation()
             ACTION_STOP_NAV -> bridge?.stopNavigation()
+            ACTION_START_ROUTE_NAV -> startRouteNavigation(intent.getStringExtra(EXTRA_ROUTE))
+            ACTION_STOP_ROUTE_NAV -> stopRouteNavigation()
             ACTION_UPDATE_RIDER_NAME -> sendRiderNameIfConnected()
             ACTION_START_TRIP -> startTrip()
             ACTION_PAUSE_TRIP -> pauseTrip()
@@ -438,6 +446,70 @@ class RideService : android.app.Service() {
         }
     }
 
+    private fun startRouteNavigation(encodedRoute: String?) {
+        val route = encodedRoute?.let { runCatching { RouteCodec.decode(it) }.getOrNull() }
+        if (route == null) {
+            Log.w(TAG, "rejected route guidance: invalid route payload")
+            notify("Route guidance unavailable")
+            return
+        }
+        val tracker = RouteTracker(route).also { it.start() }
+        val bridge = bridge
+        if (bridge == null) {
+            notify("Connect to the cluster before starting guidance")
+            return
+        }
+        val location = locationTracker ?: LocationTracker(applicationContext).also {
+            locationTracker = it
+        }
+        routeGuidanceJob?.cancel()
+        routeOffRouteNotified = false
+        location.startTracking()
+        bridge.startNavigation()
+        routeGuidanceJob = scope.launch {
+            location.lastLocation.collect { current ->
+                if (current == null) return@collect
+                val progress = tracker.update(
+                    dev.tvsopen.nav.RouteCoordinate(current.latitude, current.longitude),
+                )
+                val step = progress.currentStep
+                if (progress.status == RouteStatus.OFF_ROUTE) {
+                    bridge.onInstruction(null)
+                    if (!routeOffRouteNotified) {
+                        routeOffRouteNotified = true
+                        notify("Off route — preview a new route")
+                    }
+                } else if (progress.status == RouteStatus.ARRIVED) {
+                    bridge.onInstruction(null)
+                    bridge.stopNavigation()
+                    notify("Arrived")
+                } else if (step != null) {
+                    bridge.onInstruction(
+                        NavInstruction(
+                            title = step.instruction,
+                            street = "",
+                            distanceMeters = progress.distanceToStepMeters,
+                            etaMinutes = progress.remainingDurationSeconds / 60,
+                            pictogram = ManeuverResolver.fromText(
+                                "${step.maneuver.orEmpty()} ${step.instruction}",
+                            ),
+                            provider = "direct",
+                        ),
+                    )
+                }
+            }
+        }
+        notify("Guidance started")
+    }
+
+    private fun stopRouteNavigation() {
+        routeGuidanceJob?.cancel()
+        routeGuidanceJob = null
+        routeOffRouteNotified = false
+        bridge?.stopNavigation()
+        notify("Guidance stopped")
+    }
+
     private fun startTrip() {
         if (tripActive && !tripPaused) return
         if (tripPaused) {
@@ -499,6 +571,8 @@ class RideService : android.app.Service() {
         tripPaused = false
         tripLocationJob?.cancel()
         tripLocationJob = null
+        routeGuidanceJob?.cancel()
+        routeGuidanceJob = null
         locationTracker?.stopTracking()
         linkJob?.cancel()
         linkJob = null
@@ -590,6 +664,9 @@ class RideService : android.app.Service() {
         const val ACTION_STOP_FIND_MY = "dev.tvsopen.STOP_FIND_MY"
         const val ACTION_START_NAV = "dev.tvsopen.START_NAV"
         const val ACTION_STOP_NAV = "dev.tvsopen.STOP_NAV"
+        const val ACTION_START_ROUTE_NAV = "dev.tvsopen.START_ROUTE_NAV"
+        const val ACTION_STOP_ROUTE_NAV = "dev.tvsopen.STOP_ROUTE_NAV"
+        const val EXTRA_ROUTE = "dev.tvsopen.EXTRA_ROUTE"
         const val ACTION_UPDATE_RIDER_NAME = "dev.tvsopen.UPDATE_RIDER_NAME"
         const val ACTION_DISCONNECT = "dev.tvsopen.DISCONNECT"
         const val ACTION_START_TRIP = "dev.tvsopen.START_TRIP"

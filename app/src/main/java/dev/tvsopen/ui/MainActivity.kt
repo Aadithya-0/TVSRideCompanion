@@ -15,7 +15,7 @@ import androidx.compose.material.icons.automirrored.filled.Article
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.MoreHoriz
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -34,13 +34,25 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import dev.tvsopen.Nucleus
+import dev.tvsopen.BuildConfig
 import dev.tvsopen.log.Log
+import dev.tvsopen.nav.DestinationLinkParser
+import dev.tvsopen.nav.HttpRoutingProvider
+import dev.tvsopen.nav.RouteCoordinate
+import dev.tvsopen.nav.RoutePreview
+import dev.tvsopen.nav.RouteCodec
+import dev.tvsopen.nav.RoutingProviderConfig
+import dev.tvsopen.nav.SharedDestination
+import dev.tvsopen.nav.SharedLinkResolver
 import dev.tvsopen.prefs.RidePrefs
 import dev.tvsopen.protocol.VehicleModel
 import dev.tvsopen.session.Session
 import dev.tvsopen.transport.ConnectionState
 import dev.tvsopen.transport.RideService
+import dev.tvsopen.transport.LocationTracker
 import dev.tvsopen.transport.ScooterPairing
 import dev.tvsopen.transport.ScooterScanner
 import dev.tvsopen.ui.theme.ThemePrefs
@@ -50,10 +62,14 @@ import dev.tvsopen.ui.theme.TVSRideTheme
  * Single-activity host: bottom navigation between Home and More.
  *
  * Deliberately thin. The protocol layer is the substance; the UI observes state
- * and sends intents to [RideService]. There is no account, no repository and no
- * network client, because there is no network client in the app at all.
+ * and sends intents to [RideService]. There is no account or TVS backend; the
+ * optional direct-navigation flow owns its provider requests separately.
  */
 class MainActivity : AppCompatActivity() {
+
+    private var sharedDestination by mutableStateOf<SharedDestination?>(null)
+    private var routePreview by mutableStateOf<RoutePreview?>(null)
+    private val locationTracker by lazy { LocationTracker(applicationContext) }
 
     private val permissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { granted ->
@@ -146,6 +162,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        handleIncomingIntent(intent)
         Nucleus.init()
         // Enable the rotating file sink from the UI process too, so logs are
         // captured even before the ride service starts.
@@ -228,7 +245,7 @@ class MainActivity : AppCompatActivity() {
                         NavigationBarItem(
                             selected = tab == 2,
                             onClick = { tab = 2 },
-                            icon = { Icon(Icons.Filled.MoreHoriz, contentDescription = "More") },
+                            icon = { Icon(Icons.Filled.Tune, contentDescription = "Settings") },
                             label = { Text("More") },
                         )
                         NavigationBarItem(
@@ -293,6 +310,13 @@ class MainActivity : AppCompatActivity() {
                             onOpenOverview = { tab = 3 },
                             onOpenParked = { tab = 3 },
                             onStartTrip = { tab = 1; selectedRide = null; showRideMode = true },
+                            sharedDestination = sharedDestination,
+                            onClearDestination = { sharedDestination = null },
+                            onPreviewRoute = {
+                                previewRoute(it)
+                            },
+                            routePreview = routePreview,
+                            onStartGuidance = { startRouteGuidance(it) },
                             hasNotificationAccess = hasNotificationAccess,
                             onOpenNotificationAccess = { openNotificationAccess() },
                             onConnect = { openScanner() },
@@ -336,6 +360,88 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleIncomingIntent(intent)
+    }
+
+    private fun handleIncomingIntent(intent: Intent?) {
+        val sharedText = when (intent?.action) {
+            Intent.ACTION_SEND -> intent.getStringExtra(Intent.EXTRA_TEXT)
+            Intent.ACTION_VIEW -> intent.dataString
+            else -> null
+        } ?: return
+        val parsed = DestinationLinkParser.parse(sharedText)
+        sharedDestination = parsed
+        routePreview = null
+        if (parsed != null) {
+            lifecycleScope.launch {
+                SharedLinkResolver().resolve(parsed).onSuccess { resolved ->
+                    if (resolved != parsed) sharedDestination = resolved
+                }
+            }
+        }
+    }
+
+    private fun previewRoute(destination: SharedDestination) {
+        val key = BuildConfig.ORS_API_KEY
+        if (key.isBlank()) {
+            Toast.makeText(this, "Set ORS_API_KEY to preview routes", Toast.LENGTH_LONG).show()
+            return
+        }
+        locationTracker.startTracking()
+        val location = locationTracker.lastLocation.value
+        if (location == null) {
+            Toast.makeText(this, "Waiting for a location fix", Toast.LENGTH_LONG).show()
+            return
+        }
+        val latitude = destination.latitude
+        val longitude = destination.longitude
+        if (latitude == null || longitude == null) return
+        lifecycleScope.launch {
+            val result = HttpRoutingProvider(
+                RoutingProviderConfig(
+                    endpoint = "https://api.openrouteservice.org/v2/directions/driving-car/geojson",
+                    apiKey = key,
+                ),
+            ).route(
+                RouteCoordinate(location.latitude, location.longitude),
+                RouteCoordinate(latitude, longitude),
+            )
+            result.onSuccess { routePreview = it }
+                .onFailure {
+                    Toast.makeText(
+                        this@MainActivity,
+                        "Route preview failed",
+                        Toast.LENGTH_LONG,
+                    ).show()
+                }
+        }
+    }
+
+    private fun startRouteGuidance(route: RoutePreview) {
+        if (!hasBlePermission()) {
+            Toast.makeText(this, "Connect to the cluster first", Toast.LENGTH_LONG).show()
+            return
+        }
+        runCatching {
+            startForegroundService(
+                Intent(this, RideService::class.java)
+                    .setAction(RideService.ACTION_START_ROUTE_NAV)
+                    .putExtra(RideService.EXTRA_ROUTE, RouteCodec.encode(route)),
+            )
+        }.onFailure {
+            Log.w("MainActivity", "could not start route guidance: ${it.message}")
+            Toast.makeText(this, "Route guidance could not start", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    override fun onDestroy() {
+        locationTracker.stopTracking()
+        super.onDestroy()
     }
 
     /**

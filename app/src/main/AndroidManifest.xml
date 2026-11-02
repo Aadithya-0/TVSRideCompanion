@@ -8,6 +8,7 @@
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <!-- Read navigation from any maps app -->
     <uses-permission android:name="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
@@ -52,8 +53,8 @@
 
          What the data can do: no code path transmits contact or call-log data.
          The only consumers are the caller-ID formatter (renders as bytes on
-         the cluster) and the on-device contact resolver. INTERNET is absent,
-         so these values cannot leave through an app network connection. -->
+         the cluster) and the on-device contact resolver. Direct-navigation
+         requests are separate and do not include caller or contact data. -->
 
          NOT requested: ANSWER_PHONE_CALLS and CALL_PHONE. Both are hard
          restricted from Android 10 — only the app the user has set as the
@@ -69,11 +70,10 @@
     <!-- Parked location, only when the user asks for it -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
-    <!-- No TVS contact, enforced by architecture and by the merged-manifest
-         check in CI. The app has no INTERNET permission, no account, no
-         registration, no SmartXonnect backend calls, and no telemetry upload.
-         Contact and call-log data stay on the device — they are read only to
-         render caller ID as bytes on the cluster. -->
+    <!-- No TVS contact: the app has no account, registration, or SmartXonnect
+         backend calls. INTERNET is limited to explicit route/map-preview
+         requests; telemetry is not uploaded and caller/contact data stays
+         local except for rendering caller ID as bytes on the cluster. -->
 
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="true" />
 
@@ -92,6 +92,11 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
             </intent-filter>
         </activity>
 

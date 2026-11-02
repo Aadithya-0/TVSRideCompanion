@@ -3,7 +3,8 @@
 A third-party companion app for **TVS SmartXonnect** vehicles — Ntorq, Jupiter,
 Apache, Raider, iQube. Speaks the instrument cluster's Bluetooth LE protocol
 directly and mirrors turn-by-turn navigation from **whatever maps app you
-already use**, with **no TVS account and no network access at all**.
+already use**, with **no TVS account**. Optional direct navigation can request
+routes and bounded map previews through an explicitly configured provider.
 
 ```
 Google Maps / MapMyIndia / Organic Maps / Waze
@@ -12,8 +13,9 @@ Google Maps / MapMyIndia / Organic Maps / Waze
   NotificationListenerService  ──►  pictogram + text  ──►  BLE  ──►  cluster
 ```
 
-The manifest has **no `INTERNET` permission**. That is deliberate: "works
-without logging in" is enforced by the build, not promised in a README.
+The manifest has `INTERNET` only for the optional direct-navigation flow. BLE
+telemetry, ride history, and logs remain local; the app has no TVS backend or
+account.
 
 ---
 
@@ -75,7 +77,8 @@ evidence as in the display.
 Those are two very different claims and it is worth keeping them apart.
 
 `:app:assembleDebug` succeeds with zero warnings; CI runs the unit tests and
-asserts the merged manifest contains **no `INTERNET` permission**. The app has
+asserts the merged manifest contains the explicit `INTERNET` permission needed
+for direct navigation. The app has
 been installed and driven on a real device many times — which is how the
 Overview/Log tab swap, an unreachable Ride Mode toggle, and a log sink that
 discarded every session were all found. None of them were visible to any test.
@@ -274,8 +277,9 @@ CPU budget is capped at 2 cores by `gradle.properties`; see
 prerequisites.
 
 CI (`.github/workflows/android.yml`) runs the unit tests, asserts the merged
-manifest has **no** `INTERNET` permission, asserts the caller-ID permissions
-stay **absent**, and attaches the APK to a release on a `v*` tag.
+manifest contains the explicit `INTERNET` permission required by optional
+direct navigation, checks the Bluetooth/notification permissions, and attaches
+the APK to a release on a `v*` tag.
 
 ---
 

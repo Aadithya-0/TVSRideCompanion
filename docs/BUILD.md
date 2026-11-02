@@ -5,11 +5,13 @@
 **The app builds.** `:app:assembleDebug` succeeds with zero warnings and
 produces `app/build/outputs/apk/debug/app-debug.apk` (~17 MB, 8 DEX files).
 
-Verified in the built artifact's merged manifest: **no
-`android.permission.INTERNET`**. The full permission set is BLUETOOTH (legacy,
+Verified in the built artifact's merged manifest: **explicit
+`android.permission.INTERNET`** for direct navigation and map previews. The
+full permission set is BLUETOOTH (legacy,
 SCAN, CONNECT), location (coarse + fine), notification-listener binding,
-foreground service, post-notifications and wake lock — no network capability of
-any kind. The no-account claim is enforced by the build, not promised.
+foreground service, post-notifications and wake lock. The app still has no
+TVS account or backend connection; the direct-navigation provider is the only
+network feature.
 
 Not yet done: installed on a device, or exercised against a scooter.
 

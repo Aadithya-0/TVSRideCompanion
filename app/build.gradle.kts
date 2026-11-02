@@ -74,6 +74,15 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
+    }
+
+    buildTypes.all {
+        buildConfigField(
+            "String",
+            "ORS_API_KEY",
+            "\"${providers.environmentVariable("ORS_API_KEY").orNull ?: ""}\"",
+        )
     }
 
     testOptions {

@@ -30,6 +30,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.TextButton
 import dev.tvsopen.ui.theme.AppSwitch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -45,6 +46,8 @@ import dev.tvsopen.session.ConnectionState1
 import dev.tvsopen.session.HudState
 import dev.tvsopen.session.ParkedInfo
 import dev.tvsopen.session.Telemetry
+import dev.tvsopen.nav.SharedDestination
+import dev.tvsopen.nav.RoutePreview
 import dev.tvsopen.transport.ConnectionState
 import dev.tvsopen.transport.label
 import dev.tvsopen.ui.theme.LocalTilePalette
@@ -56,7 +59,7 @@ import dev.tvsopen.ui.theme.NumberStyle
  * Card navigation rather than a wall of values: connect, then the two places
  * there is something to read. Mirrors the official TVS app's Ntorq dashboard,
  * minus everything that is cloud-backed (ride history, ride modes, the server
- * "last parked" pin) because this app has no account and no network.
+ * "last parked" pin) because this app has no account or TVS backend.
  *
  * Layout shape adapted from `overclock98/JupiterRideCompanion` (CC BY-NC 4.0),
  * with no TVS or Jupiter branding — that project is the Jupiter's companion,
@@ -81,6 +84,11 @@ fun HomeScreen(
     onOpenParked: () -> Unit,
     onConnect: () -> Unit,
     onStartTrip: () -> Unit = {},
+    sharedDestination: SharedDestination? = null,
+    onClearDestination: () -> Unit = {},
+    onPreviewRoute: (SharedDestination) -> Unit = {},
+    routePreview: RoutePreview? = null,
+    onStartGuidance: (RoutePreview) -> Unit = {},
     hasNotificationAccess: Boolean = true,
     onOpenNotificationAccess: () -> Unit = {},
     modifier: Modifier = Modifier,
@@ -94,6 +102,17 @@ fun HomeScreen(
             .padding(horizontal = 16.dp),
     ) {
         Header(connection, connected)
+
+        sharedDestination?.let { destination ->
+            Spacer(Modifier.height(12.dp))
+            DestinationPreviewCard(
+                destination,
+                onClearDestination,
+                onPreviewRoute,
+                routePreview,
+                onStartGuidance,
+            )
+        }
 
         if (!hasNotificationAccess) {
             Spacer(Modifier.height(10.dp))
@@ -145,6 +164,66 @@ fun HomeScreen(
         LinkCard(telemetry)
 
         Spacer(Modifier.height(28.dp))
+    }
+}
+
+@Composable
+private fun DestinationPreviewCard(
+    destination: SharedDestination,
+    onClear: () -> Unit,
+    onPreviewRoute: (SharedDestination) -> Unit,
+    routePreview: RoutePreview?,
+    onStartGuidance: (RoutePreview) -> Unit,
+) {
+    Surface(
+        Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Filled.Navigation,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("Destination received", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        destination.label ?: "Shared Google Maps location",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            Text(
+                if (routePreview != null) {
+                    "${routePreview.distanceMeters / 1000.0} km · " +
+                        "${routePreview.durationSeconds / 60} min estimated"
+                } else if (destination.hasCoordinates) {
+                    "Ready for route preview"
+                } else {
+                    "This link needs location confirmation before routing"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Button(
+                    onClick = {
+                        if (routePreview == null) onPreviewRoute(destination)
+                        else onStartGuidance(routePreview)
+                    },
+                    enabled = destination.hasCoordinates,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text(if (routePreview == null) "Preview route" else "Start guidance")
+                }
+                TextButton(onClick = onClear) { Text("Dismiss") }
+            }
+        }
     }
 }
 
