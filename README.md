@@ -246,8 +246,15 @@ Adding a model means writing one `ProtocolDriver`. The transport does not change
 - **Navigation on the cluster** from any maps app, no account
 - **Find my scooter** — injects the flag into the keepalive packet
 - **Live telemetry** — speed, odometer, fuel, trip, engine temp, service status
+- **Local ride recording** — start, pause and stop trips with GPS breadcrumbs,
+  speed/RPM statistics, month-filtered history and offline route details
 - **Find and connect** — BLE scan filtered on the SmartXonnect service
 - **No cloud** — nothing leaves the phone
+
+Ride history is stored only in the app's local preferences. GPS recording needs
+location permission; without a fix, the trip and telemetry statistics still
+save but the detail view has no route line. The app keeps the latest 50 rides
+and samples very dense tracks to keep local storage small.
 
 Telemetry is limited to values the Ntorq cluster is documented to display. TVS's
 own manual enumerates every display element, and **range and fuel economy are
@@ -259,7 +266,7 @@ they are decoded but not shown; see [docs/NAVIGATION.md](docs/NAVIGATION.md).
 ## Build
 
 ```bash
-./gradlew :app:testDebugUnitTest :app:assembleDebug
+./gradlew :app:testDebugUnitTest :app:assembleDebug --no-daemon --max-workers=2 --no-parallel
 ```
 
 CPU budget is capped at 2 cores by `gradle.properties`; see

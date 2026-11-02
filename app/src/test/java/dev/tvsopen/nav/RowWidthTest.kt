@@ -194,6 +194,20 @@ class RowWidthTest {
     }
 
     @Test
+    fun `wide displays keep the full sentence instead of short codes`() {
+        val step = NavInstruction(
+            title = "Turn left onto Example Road",
+            street = "",
+            distanceMeters = 100,
+            pictogram = 0,
+            provider = "test",
+        )
+
+        assertEquals("<- Turn left onto", step.displayLine(maxChars = RowChars.JUPITER))
+        assertEquals("<- LFT to Ex", step.displayLine(maxChars = RowChars.NTORQ))
+    }
+
+    @Test
     fun `displayLine falls back to the title when there is no street`() {
         val step = NavInstruction(
             title = "Take U-Turn",

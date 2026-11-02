@@ -95,7 +95,6 @@ fun RideDetailScreen(
                 )
             }
         }
-
         // ─── Map ───────────────────────────────────────────────────────────
         if (ride.points.isNotEmpty()) {
             Surface(

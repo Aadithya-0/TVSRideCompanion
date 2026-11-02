@@ -45,6 +45,8 @@ class RideService : android.app.Service() {
     private var ble: ScooterBleService? = null
     private var locationTracker: LocationTracker? = null
     private var tripActive = false
+    private var tripPaused = false
+    private var tripLocationJob: Job? = null
     /** Parents the per-connection collectors so a reconnect or disconnect
      * cancels them. Without this every connect() added three more collectors
      * on the same flows, and a stale one could restart the *old* bridge's
@@ -411,13 +413,21 @@ class RideService : android.app.Service() {
     }
 
     private fun startTrip() {
-        if (tripActive) return
+        if (tripActive && !tripPaused) return
+        if (tripPaused) {
+            tripPaused = false
+            locationTracker?.startTracking()
+            notify("Trip resumed")
+            Log.i(TAG, "manual trip resumed")
+            return
+        }
         tripActive = true
         Session.attachRideLog(applicationContext)
         Session.startManualTrip()
         val tracker = locationTracker ?: LocationTracker(applicationContext).also { locationTracker = it }
         tracker.startTracking()
-        scope.launch {
+        tripLocationJob?.cancel()
+        tripLocationJob = scope.launch {
             tracker.lastLocation.collect { loc ->
                 if (loc != null && tripActive) {
                     val tel = Session.telemetry.value
@@ -435,7 +445,8 @@ class RideService : android.app.Service() {
     }
 
     private fun pauseTrip() {
-        if (!tripActive) return
+        if (!tripActive || tripPaused) return
+        tripPaused = true
         locationTracker?.stopTracking()
         notify("Trip paused")
         Log.i(TAG, "manual trip paused")
@@ -444,6 +455,9 @@ class RideService : android.app.Service() {
     private fun endTrip() {
         if (!tripActive) return
         tripActive = false
+        tripPaused = false
+        tripLocationJob?.cancel()
+        tripLocationJob = null
         locationTracker?.stopTracking()
         Session.endManualTrip()
         notify("Trip saved")
@@ -451,6 +465,11 @@ class RideService : android.app.Service() {
     }
 
     private fun teardown() {
+        tripActive = false
+        tripPaused = false
+        tripLocationJob?.cancel()
+        tripLocationJob = null
+        locationTracker?.stopTracking()
         linkJob?.cancel()
         linkJob = null
         ringingJob?.cancel()

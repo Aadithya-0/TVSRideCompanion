@@ -72,7 +72,6 @@ fun RideHistoryScreen(
         if (selectedMonth == null) rides
         else rides.filter { monthFormatter.format(Date(it.startedAt)) == selectedMonth }
     }
-
     Column(modifier.fillMaxSize()) {
         // ─── Header row ───────────────────────────────────────────────────
         Row(

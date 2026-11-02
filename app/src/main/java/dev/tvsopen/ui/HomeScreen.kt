@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -79,6 +80,7 @@ fun HomeScreen(
     onOpenOverview: () -> Unit,
     onOpenParked: () -> Unit,
     onConnect: () -> Unit,
+    onStartTrip: () -> Unit = {},
     hasNotificationAccess: Boolean = true,
     onOpenNotificationAccess: () -> Unit = {},
     modifier: Modifier = Modifier,
@@ -120,6 +122,12 @@ fun HomeScreen(
         // re-attach after a reboot, so with no toggle the resume path is dead
         // code that can never fire.
         RideModeCard(rideMode, onRideModeChange)
+
+        // Start Trip shortcut — opens the Rides tab with controls ready.
+        if (connected) {
+            Spacer(Modifier.height(12.dp))
+            StartTripCard(onStartTrip)
+        }
 
         Spacer(Modifier.height(20.dp))
         SectionLabel("While riding")
@@ -549,6 +557,43 @@ private fun NotificationAccessBanner(onOpen: () -> Unit) {
                 ),
             ) {
                 Text("Enable in Android Settings", color = MaterialTheme.colorScheme.onError)
+            }
+        }
+    }
+}
+
+@Composable
+private fun StartTripCard(onStartTrip: () -> Unit) {
+    Surface(
+        onClick = onStartTrip,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        color = MaterialTheme.colorScheme.primaryContainer,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+    ) {
+        Row(
+            Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                Icons.Filled.PlayArrow,
+                contentDescription = null,
+                modifier = Modifier.size(26.dp),
+                tint = MaterialTheme.colorScheme.primary,
+            )
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    "Start Trip",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    "Record route, speed & RPM",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }

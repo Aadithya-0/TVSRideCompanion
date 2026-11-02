@@ -24,6 +24,7 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -50,6 +51,7 @@ import dev.tvsopen.ui.theme.NumberStyle
 @Composable
 fun RideScreen(
     telemetry: Telemetry,
+    onOpenHistory: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -73,10 +75,19 @@ fun RideScreen(
     ) {
         // ─── Header ───────────────────────────────────────────────────────
         Spacer(Modifier.height(20.dp))
-        Text(
-            "Ride Mode",
-            style = MaterialTheme.typography.headlineLarge,
-        )
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                "Ride Mode",
+                style = MaterialTheme.typography.headlineLarge,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = onOpenHistory) {
+                Text("History")
+            }
+        }
         Text(
             if (!tripRunning) "Tap Start Trip to begin recording"
             else if (tripPaused) "Paused — GPS recording suspended"

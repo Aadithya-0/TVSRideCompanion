@@ -193,6 +193,7 @@ class MainActivity : AppCompatActivity() {
 
         // Selected ride for detail view (null = show list)
         var selectedRide by remember { mutableStateOf<dev.tvsopen.session.Ride?>(null) }
+        var showRideMode by rememberSaveable { mutableStateOf(false) }
 
         val telemetry by Session.telemetry.collectAsStateWithLifecycle()
         val hud by Session.hud.collectAsStateWithLifecycle()
@@ -220,7 +221,7 @@ class MainActivity : AppCompatActivity() {
                         )
                         NavigationBarItem(
                             selected = tab == 1,
-                            onClick = { tab = 1; selectedRide = null },
+                            onClick = { tab = 1; selectedRide = null; showRideMode = false },
                             icon = { Icon(Icons.Filled.History, contentDescription = "Ride History") },
                             label = { Text("Rides") },
                         )
@@ -291,7 +292,7 @@ class MainActivity : AppCompatActivity() {
                             },
                             onOpenOverview = { tab = 3 },
                             onOpenParked = { tab = 3 },
-                            onStartTrip = { tab = 1; selectedRide = null },
+                            onStartTrip = { tab = 1; selectedRide = null; showRideMode = true },
                             hasNotificationAccess = hasNotificationAccess,
                             onOpenNotificationAccess = { openNotificationAccess() },
                             onConnect = { openScanner() },
@@ -299,7 +300,12 @@ class MainActivity : AppCompatActivity() {
                         1 -> {
                             // Attach ride log so rides are loaded
                             Session.attachRideLog(this@MainActivity)
-                            if (selectedRide != null) {
+                            if (showRideMode) {
+                                RideScreen(
+                                    telemetry = telemetry,
+                                    onOpenHistory = { showRideMode = false },
+                                )
+                            } else if (selectedRide != null) {
                                 RideDetailScreen(
                                     ride = selectedRide!!,
                                     onBack = { selectedRide = null },

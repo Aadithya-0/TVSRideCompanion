@@ -76,6 +76,10 @@ android {
         compose = true
     }
 
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -111,6 +115,8 @@ dependencies {
     // the double-division bug that made the odometer read 10x low was invisible
     // to the compiler and to every smoke test on a disconnected phone.
     testImplementation("junit:junit:4.13.2")
+    testImplementation("androidx.test:core:1.6.1")
+    testImplementation("org.robolectric:robolectric:4.13")
 
     // Embedded OpenStreetMap view (docs/MAPS.md). Pinned, not ranged: tile
     // fetching behaviour must not shift under a future release unreviewed.

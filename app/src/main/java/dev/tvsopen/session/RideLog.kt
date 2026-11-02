@@ -90,8 +90,9 @@ class RideLog(context: Context) {
     }.getOrDefault(emptyList())
 
     private fun persist(list: List<Ride>) {
+        val bounded = list.take(MAX_RIDES)
         val arr = JSONArray()
-        list.take(MAX_RIDES).forEach { r ->
+        bounded.forEach { r ->
             val ptsArr = JSONArray()
             // Sample points if too dense to keep storage light (max 1000 points per ride)
             val step = if (r.points.size > 1000) (r.points.size / 1000) + 1 else 1
@@ -112,7 +113,7 @@ class RideLog(context: Context) {
             )
         }
         sp.edit().putString(KEY, arr.toString()).apply()
-        _rides.value = list
+        _rides.value = bounded
     }
 
     /** Opens a ride. A ride already in progress is left alone. */
@@ -130,7 +131,7 @@ class RideLog(context: Context) {
         val open = current.firstOrNull() ?: return
         if (!open.inProgress) return
         if (distanceKm < 0) return
-        _rides.value = listOf(open.copy(distanceKm = distanceKm)) + current.drop(1)
+        persist(listOf(open.copy(distanceKm = distanceKm)) + current.drop(1))
     }
 
     /** Records a GPS track point and live bike telemetry. */
@@ -147,7 +148,7 @@ class RideLog(context: Context) {
             topRpm = newTopRpm,
             points = open.points + newPoint,
         )
-        _rides.value = listOf(updated) + current.drop(1)
+        persist(listOf(updated) + current.drop(1))
     }
 
     /** Closes the open ride and calculates averages and totals. */
