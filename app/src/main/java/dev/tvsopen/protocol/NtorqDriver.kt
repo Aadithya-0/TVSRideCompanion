@@ -339,7 +339,7 @@ class NtorqDriver(
         findMyScooter = true,
         navigationHud = true,
         textMessages = false,
-        callerId = false,
+        callerId = true,
         mediaTitle = false,
         buttonGestures = false,
         timeSync = true,

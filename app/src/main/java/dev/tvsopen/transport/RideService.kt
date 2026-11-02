@@ -13,6 +13,7 @@ import dev.tvsopen.log.Log
 import dev.tvsopen.nav.NavInstruction
 import dev.tvsopen.nav.NavigationBridge
 import dev.tvsopen.prefs.RidePrefs
+import dev.tvsopen.protocol.Command
 import dev.tvsopen.protocol.DashState
 import dev.tvsopen.protocol.DriverRegistry
 import dev.tvsopen.protocol.NtorqDriver
@@ -25,6 +26,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -48,6 +51,8 @@ class RideService : android.app.Service() {
     private var lastAddress: String? = null
     /** Driver for the current link; needed outside connect() by the rider-name send. */
     private var driver: ProtocolDriver? = null
+    private var callObserver: CallObserver? = null
+    private var ringingJob: Job? = null
     /**
      * Held while connected, released on disconnect and on teardown.
      *
@@ -319,9 +324,39 @@ class RideService : android.app.Service() {
                                     signalBars = 4,
                                 )
                             }
+                            callObserver?.stop()
+                            callObserver = CallObserver(
+                                context = this@RideService,
+                                onIncomingCall = { number, name ->
+                                    ringingJob?.cancel()
+                                    ringingJob = scope.launch {
+                                        val frame = driver?.buildCallerInfo(number, name, Command.CALL_RINGING)
+                                        while (isActive) {
+                                            if (frame != null) {
+                                                transport.write(frame)
+                                            }
+                                            delay(2000L)
+                                        }
+                                    }
+                                },
+                                onCallEnded = {
+                                    ringingJob?.cancel()
+                                    ringingJob = null
+                                    val clearFrame = driver?.buildCallerInfo("", null, Command.CALL_IDLE)
+                                    if (clearFrame != null) {
+                                        scope.launch {
+                                            transport.write(clearFrame)
+                                        }
+                                    }
+                                },
+                            ).also { it.start() }
                         }
                         ConnectionState.DISCONNECTED -> {
                             releaseWakeLock()
+                            ringingJob?.cancel()
+                            ringingJob = null
+                            callObserver?.stop()
+                            callObserver = null
                             notify("Disconnected")
                         }
                         else -> Unit
@@ -372,6 +407,10 @@ class RideService : android.app.Service() {
     private fun teardown() {
         linkJob?.cancel()
         linkJob = null
+        ringingJob?.cancel()
+        ringingJob = null
+        callObserver?.stop()
+        callObserver = null
         bridge?.stopKeepalive()
         bridge?.stopNavigation()
         releaseWakeLock()
