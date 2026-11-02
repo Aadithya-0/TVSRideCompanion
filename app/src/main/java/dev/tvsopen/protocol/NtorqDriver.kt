@@ -151,8 +151,9 @@ object NtorqFrames {
             FieldSpec(Field.BACKLIGHT, 11),
             FieldSpec(Field.LOCATION_TAG, 12),
             FieldSpec(Field.TIME_60KMPH, 13),
-            FieldSpec(Field.TRIP_F_METER, 14, length = 3),
-            FieldSpec(Field.ENGINE_RPM, 17, length = 2),
+            FieldSpec(Field.TRIP_F_METER, 14, length = 2),
+            FieldSpec(Field.ENGINE_RPM, 16, length = 2),
+            FieldSpec(Field.CHECKSUM, 18),
             FieldSpec(Field.END_BYTE, 19),
         ),
     )

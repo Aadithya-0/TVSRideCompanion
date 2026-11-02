@@ -83,6 +83,23 @@ class RidePrefs private constructor(private val ctx: Context) {
             }.apply()
         }
 
+    val parkedLat: Double?
+        get() = sp.getString("parked_lat", null)?.toDoubleOrNull()
+
+    val parkedLon: Double?
+        get() = sp.getString("parked_lon", null)?.toDoubleOrNull()
+
+    val parkedTime: Long
+        get() = sp.getLong("parked_time", 0L)
+
+    fun updateParkedLocation(lat: Double, lon: Double, atMillis: Long = System.currentTimeMillis()) {
+        sp.edit()
+            .putString("parked_lat", lat.toString())
+            .putString("parked_lon", lon.toString())
+            .putLong("parked_time", atMillis)
+            .apply()
+    }
+
     companion object {
         private const val NAME = "tvsride"
         private const val KEY_RIDE_MODE = "ride_mode"

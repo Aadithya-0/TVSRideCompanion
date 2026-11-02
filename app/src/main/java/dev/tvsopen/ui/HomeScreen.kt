@@ -24,6 +24,8 @@ import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -77,6 +79,8 @@ fun HomeScreen(
     onOpenOverview: () -> Unit,
     onOpenParked: () -> Unit,
     onConnect: () -> Unit,
+    hasNotificationAccess: Boolean = true,
+    onOpenNotificationAccess: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val connected = connection.state == ConnectionState.CONNECTED
@@ -88,6 +92,11 @@ fun HomeScreen(
             .padding(horizontal = 16.dp),
     ) {
         Header(connection, connected)
+
+        if (!hasNotificationAccess) {
+            Spacer(Modifier.height(10.dp))
+            NotificationAccessBanner(onOpenNotificationAccess)
+        }
 
         if (hud.active) {
             Spacer(Modifier.height(10.dp))
@@ -115,7 +124,7 @@ fun HomeScreen(
         Spacer(Modifier.height(20.dp))
         SectionLabel("While riding")
 
-        MirrorNavCard(navMirroring, hud, onNavMirrorChange)
+        MirrorNavCard(navMirroring, hud, hasNotificationAccess, onNavMirrorChange)
         Spacer(Modifier.height(12.dp))
         FindMyCard(findMyEnabled, onFindMyChange)
         Spacer(Modifier.height(12.dp))
@@ -299,12 +308,18 @@ private fun Pill(text: String, on: Boolean) {
  * not a TVS server.
  */
 @Composable
-private fun MirrorNavCard(enabled: Boolean, hud: HudState, onChange: (Boolean) -> Unit) {
+private fun MirrorNavCard(
+    enabled: Boolean,
+    hud: HudState,
+    hasNotificationAccess: Boolean,
+    onChange: (Boolean) -> Unit,
+) {
     ActionCard(
         background = LocalTilePalette.current.accent,
         icon = Icons.Filled.Navigation,
         title = "Mirror navigation",
         subtitle = when {
+            !hasNotificationAccess -> "Action required: Notification access disabled"
             !enabled -> "Off — turn-by-turn is not being sent"
             hud.active -> "Live from ${hud.provider ?: "your maps app"}"
             else -> "On — waiting for a navigation step"
@@ -503,4 +518,38 @@ private fun RideModeCard(enabled: Boolean, onChange: (Boolean) -> Unit) {
             AppSwitch(checked = enabled, onCheckedChange = onChange)
         },
     )
+}
+
+@Composable
+private fun NotificationAccessBanner(onOpen: () -> Unit) {
+    Surface(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.errorContainer,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.error),
+    ) {
+        Column(Modifier.padding(14.dp)) {
+            Text(
+                "Turn-by-Turn Navigation Disabled",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onErrorContainer,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "Google Maps directions cannot reach your cluster until TVSRide is enabled under Android's Notification Access.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onErrorContainer,
+            )
+            Spacer(Modifier.height(10.dp))
+            Button(
+                onClick = onOpen,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.error,
+                ),
+            ) {
+                Text("Enable in Android Settings", color = MaterialTheme.colorScheme.onError)
+            }
+        }
+    }
 }

@@ -98,10 +98,30 @@ fun OverviewScreen(
             BigStat(
                 Modifier.weight(1f),
                 Icons.Filled.Bolt,
-                telemetry.engineRpm?.toString() ?: "—",
+                telemetry.topRpm?.toString() ?: "—",
                 "rpm",
                 "Top RPM",
                 LocalTilePalette.current.largeRight,
+            )
+        }
+
+        Spacer(Modifier.height(12.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            BigStat(
+                Modifier.weight(1f),
+                Icons.Filled.Speed,
+                telemetry.speedKmh?.toString() ?: "—",
+                "km/h",
+                "Live Speed",
+                LocalTilePalette.current.neutral,
+            )
+            BigStat(
+                Modifier.weight(1f),
+                Icons.Filled.Bolt,
+                telemetry.engineRpm?.toString() ?: "—",
+                "rpm",
+                "Live RPM",
+                LocalTilePalette.current.neutral,
             )
         }
 

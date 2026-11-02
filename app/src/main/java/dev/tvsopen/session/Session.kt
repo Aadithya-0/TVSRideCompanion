@@ -31,8 +31,9 @@ data class Telemetry(
     val topSpeedKmh: Int? = null,         // SM1 idx 9
     val throttlePercent: Int? = null,     // SM1 idx 10, /2
     val timeTo60Sec: Double? = null,      // SM1 idx 13, /10
-    val tripFMeters: Int? = null,         // SM1 idx 14..16, /10
-    val engineRpm: Int? = null,           // SM1 idx 17..18
+    val tripFMeters: Int? = null,         // SM1 idx 14..15
+    val engineRpm: Int? = null,           // SM1 idx 16..17
+    val topRpm: Int? = null,              // Peak RPM observed
     val serviceDue: Boolean? = null,      // SM2 idx 4
     val softwareVersion: String? = null,  // SM2 idx 7
     val avgEconomyKmpl: Int? = null,      // SM3 idx 8
@@ -253,8 +254,11 @@ object Session {
                     ?: cur.throttlePercent,
                 timeTo60Sec = scaled(Field.TIME_60KMPH, 10.0)
                     ?: cur.timeTo60Sec,
-                tripFMeters = scaled(Field.TRIP_F_METER, 10.0)?.toInt() ?: cur.tripFMeters,
-                engineRpm = frame.field(Field.ENGINE_RPM)?.toInt() ?: cur.engineRpm,
+                tripFMeters = frame.field(Field.TRIP_F_METER)?.toInt() ?: cur.tripFMeters,
+                engineRpm = frame.field(Field.ENGINE_RPM)?.toInt()?.takeIf { it in 0..15000 } ?: cur.engineRpm,
+                topRpm = frame.field(Field.ENGINE_RPM)?.toInt()?.takeIf { it in 1..15000 }?.let {
+                    maxOf(cur.topRpm ?: 0, it)
+                } ?: cur.topRpm,
                 lastFrameAt = now,
             ).also { trackRideDistance() }
 

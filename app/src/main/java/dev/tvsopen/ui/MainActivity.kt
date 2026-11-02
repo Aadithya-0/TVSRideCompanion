@@ -114,9 +114,9 @@ class MainActivity : AppCompatActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             missing += Manifest.permission.BLUETOOTH_SCAN
             missing += Manifest.permission.BLUETOOTH_CONNECT
-        } else {
-            missing += Manifest.permission.ACCESS_FINE_LOCATION
         }
+        missing += Manifest.permission.ACCESS_FINE_LOCATION
+        missing += Manifest.permission.ACCESS_COARSE_LOCATION
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             missing += Manifest.permission.POST_NOTIFICATIONS
         }
@@ -327,6 +327,8 @@ class MainActivity : AppCompatActivity() {
                             },
                             onOpenOverview = { tab = 2 },
                             onOpenParked = { tab = 2 },
+                            hasNotificationAccess = hasNotificationAccess,
+                            onOpenNotificationAccess = { openNotificationAccess() },
                             // The Connect card now opens the scanner. It used to
                             // send ACTION_CONNECT with no address, which the
                             // service logged and ignored — the only reason a

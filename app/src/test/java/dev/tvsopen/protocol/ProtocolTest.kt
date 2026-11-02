@@ -80,9 +80,22 @@ class ProtocolTest {
         // Was asserted little-endian, on the strength of a fixture writer that
         // encoded the same assumption. Reading 02 88 2A as 2A 88 02 turned a
         // 16,593 km odometer into 278,733 km on the dashboard.
-        val raw = frame(0x10) { it.setBE(17, 0x1234, 2) }
+        val raw = frame(0x10) { it.setBE(16, 0x1234, 2) }
         val decoded = NtorqFrames.SM1.decode(raw)!!
         assertEquals(0x1234L, decoded.field(Field.ENGINE_RPM))
+    }
+
+    @Test
+    fun `raider 125 hardware frame decodes correct RPM and odometer`() {
+        // Captured from physical TVS Raider 125 hardware:
+        // 5A 10 00 01 67 99 10 01 00 6A 00 00 00 3E 01 EC 08 14 D2 FF
+        val raiderFrame = byteArrayOf(
+            0x5A, 0x10, 0x00, 0x01, 0x67, 0x99.toByte(), 0x10, 0x01, 0x00, 0x6A,
+            0x00, 0x00, 0x00, 0x3E, 0x01, 0xEC.toByte(), 0x08, 0x14, 0xD2.toByte(), 0xFF.toByte(),
+        )
+        val decoded = NtorqFrames.SM1.decode(raiderFrame)!!
+        assertEquals(92057L, decoded.field(Field.ODOMETER))
+        assertEquals(2068L, decoded.field(Field.ENGINE_RPM))
     }
 
     @Test

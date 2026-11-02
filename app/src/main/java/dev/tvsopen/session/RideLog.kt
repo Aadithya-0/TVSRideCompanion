@@ -1,14 +1,10 @@
-// Ride history, computed on the phone.
+// Ride history, computed locally on the phone.
 //
 // The official app's "My Rides" list, Total Rides and Last Ride all come from
 // TVS's servers, tied to an account. This app has neither, so the same numbers
-// are derived locally from what the cluster already sends: a ride is a
-// connected period, its distance is the odometer delta, its duration is wall
-// clock.
-//
-// The consequence is deliberate and stated in the UI: a ride recorded here
-// exists only on this phone and is lost on uninstall. That is the price of
-// having no account, and it is a fair trade for not needing one.
+// are derived locally: a ride is a connected period, its distance is the
+// odometer delta, its path is recorded from GPS points, and speed ranges are
+// tracked for color-coded map display.
 
 package dev.tvsopen.session
 
@@ -19,11 +15,23 @@ import kotlinx.coroutines.flow.asStateFlow
 import org.json.JSONArray
 import org.json.JSONObject
 
-/** One ride: a connected period, open or closed. */
+/** One GPS track coordinate along the route. */
+data class TrackPoint(
+    val lat: Double,
+    val lon: Double,
+    val speedKmh: Int,
+    val atMillis: Long,
+)
+
+/** One ride: a connected period, open or closed, with route and performance metrics. */
 data class Ride(
     val startedAt: Long,
     val endedAt: Long?,
     val distanceKm: Double,
+    val topSpeedKmh: Int = 0,
+    val avgSpeedKmh: Int = 0,
+    val topRpm: Int = 0,
+    val points: List<TrackPoint> = emptyList(),
 ) {
     val inProgress: Boolean get() = endedAt == null
 
@@ -34,12 +42,7 @@ data class Ride(
 }
 
 /**
- * Bounded local ride log.
- *
- * Keeps [MAX_RIDES] recent rides plus two running totals that survive the
- * window. Plain JSON in SharedPreferences: three numbers per ride, a dependency
- * would buy nothing, and the log has to be readable over `adb` when something
- * looks wrong.
+ * Bounded local ride log with GPS breadcrumbs and speed analytics.
  */
 class RideLog(context: Context) {
 
@@ -62,10 +65,26 @@ class RideLog(context: Context) {
         val arr = JSONArray(sp.getString(KEY, "[]") ?: "[]")
         (0 until arr.length()).mapNotNull { i ->
             val o = arr.optJSONObject(i) ?: return@mapNotNull null
+            val ptsArr = o.optJSONArray("pts") ?: JSONArray()
+            val points = (0 until ptsArr.length()).mapNotNull { pIdx ->
+                val p = ptsArr.optJSONArray(pIdx) ?: return@mapNotNull null
+                if (p.length() >= 4) {
+                    TrackPoint(
+                        lat = p.optDouble(0),
+                        lon = p.optDouble(1),
+                        speedKmh = p.optInt(2),
+                        atMillis = p.optLong(3),
+                    )
+                } else null
+            }
             Ride(
                 startedAt = o.optLong("s"),
                 endedAt = if (o.isNull("e")) null else o.optLong("e"),
                 distanceKm = o.optDouble("d", 0.0),
+                topSpeedKmh = o.optInt("top_spd", 0),
+                avgSpeedKmh = o.optInt("avg_spd", 0),
+                topRpm = o.optInt("top_rpm", 0),
+                points = points,
             )
         }
     }.getOrDefault(emptyList())
@@ -73,11 +92,23 @@ class RideLog(context: Context) {
     private fun persist(list: List<Ride>) {
         val arr = JSONArray()
         list.take(MAX_RIDES).forEach { r ->
+            val ptsArr = JSONArray()
+            // Sample points if too dense to keep storage light (max 1000 points per ride)
+            val step = if (r.points.size > 1000) (r.points.size / 1000) + 1 else 1
+            for (idx in r.points.indices step step) {
+                val pt = r.points[idx]
+                val p = JSONArray().put(pt.lat).put(pt.lon).put(pt.speedKmh).put(pt.atMillis)
+                ptsArr.put(p)
+            }
             arr.put(
                 JSONObject()
                     .put("s", r.startedAt)
                     .put("e", r.endedAt ?: JSONObject.NULL)
-                    .put("d", r.distanceKm),
+                    .put("d", r.distanceKm)
+                    .put("top_spd", r.topSpeedKmh)
+                    .put("avg_spd", r.avgSpeedKmh)
+                    .put("top_rpm", r.topRpm)
+                    .put("pts", ptsArr),
             )
         }
         sp.edit().putString(KEY, arr.toString()).apply()
@@ -93,34 +124,63 @@ class RideLog(context: Context) {
 
     /**
      * Records progress on the open ride.
-     *
-     * Updates the in-memory value only; the row is written on [finish] or the
-     * next [start]. Persisting on every odometer frame would be a disk write at
-     * telemetry rate, which the log must never be the reason for.
      */
     fun update(distanceKm: Double) {
         val current = _rides.value
-        if (current.firstOrNull()?.inProgress != true) return
+        val open = current.firstOrNull() ?: return
+        if (!open.inProgress) return
         if (distanceKm < 0) return
-        _rides.value = listOf(current.first().copy(distanceKm = distanceKm)) + current.drop(1)
+        _rides.value = listOf(open.copy(distanceKm = distanceKm)) + current.drop(1)
     }
 
-    /** Closes the open ride and folds it into the running totals. */
+    /** Records a GPS track point and live bike telemetry. */
+    fun addPoint(lat: Double, lon: Double, speedKmh: Int, liveRpm: Int, now: Long = System.currentTimeMillis()) {
+        val current = _rides.value
+        val open = current.firstOrNull() ?: return
+        if (!open.inProgress) return
+
+        val newPoint = TrackPoint(lat, lon, speedKmh, now)
+        val newTopSpeed = maxOf(open.topSpeedKmh, speedKmh)
+        val newTopRpm = maxOf(open.topRpm, liveRpm)
+        val updated = open.copy(
+            topSpeedKmh = newTopSpeed,
+            topRpm = newTopRpm,
+            points = open.points + newPoint,
+        )
+        _rides.value = listOf(updated) + current.drop(1)
+    }
+
+    /** Closes the open ride and calculates averages and totals. */
     fun finish(now: Long = System.currentTimeMillis()) {
         val current = _rides.value
         val open = current.firstOrNull() ?: return
         if (!open.inProgress) return
+
+        val durationSec = ((now - open.startedAt) / 1000).coerceAtLeast(1)
+        val movingPoints = open.points.filter { it.speedKmh > 0 }
+        val avgSpeed = if (movingPoints.isNotEmpty()) {
+            movingPoints.map { it.speedKmh }.average().toInt()
+        } else {
+            ((open.distanceKm / (durationSec / 3600.0))).toInt().coerceIn(0, 150)
+        }
+
+        val completed = open.copy(
+            endedAt = now,
+            avgSpeedKmh = avgSpeed,
+        )
+
         sp.edit()
             .putInt(KEY_TOTAL, totalRides + 1)
-            .putString(KEY_DIST, (totalDistanceKm + open.distanceKm).toString())
+            .putString(KEY_DIST, (totalDistanceKm + completed.distanceKm).toString())
             .apply()
-        persist(listOf(open.copy(endedAt = now)) + current.drop(1))
+
+        persist(listOf(completed) + current.drop(1))
     }
 
     companion object {
         private const val KEY = "ride_log"
         private const val KEY_TOTAL = "ride_total_count"
         private const val KEY_DIST = "ride_total_distance"
-        private const val MAX_RIDES = 100
+        private const val MAX_RIDES = 50
     }
 }
