@@ -98,7 +98,7 @@ jobs:
       # AGENTS.md still pass `--no-daemon --max-workers=2 --no-parallel`
       # explicitly, so nothing about this machine's limits has been relaxed.
       - name: Unit tests and build
-        run: ./gradlew :app:testDebugUnitTest :app:assembleDebug --stacktrace --info
+        run: ./gradlew :app:testDebugUnitTest :app:assembleDebug --stacktrace
 
       # Direct navigation and map previews are opt-in network features. Keep
       # the capability explicit in the merged APK rather than relying on a
