@@ -50,4 +50,14 @@ class DestinationLinkParserTest {
         assertEquals(9.9639148, destination!!.latitude!!, 0.00001)
         assertEquals(76.4058745, destination.longitude!!, 0.00001)
     }
+
+    @Test
+    fun `extracts a Maps URL when shared text includes a title`() {
+        val destination = DestinationLinkParser.parse(
+            "Muthoot Institute https://maps.app.goo.gl/D5oaAvSHv2Tshr61A",
+        )
+
+        assertNotNull(destination)
+        assertEquals("https://maps.app.goo.gl/D5oaAvSHv2Tshr61A", destination!!.source)
+    }
 }

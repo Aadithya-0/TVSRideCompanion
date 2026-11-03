@@ -43,6 +43,7 @@ import dev.tvsopen.BuildConfig
 import dev.tvsopen.log.Log
 import dev.tvsopen.nav.DestinationLinkParser
 import dev.tvsopen.nav.HttpRoutingProvider
+import dev.tvsopen.nav.OsrmRoutingProvider
 import dev.tvsopen.nav.RouteCoordinate
 import dev.tvsopen.nav.RoutePreview
 import dev.tvsopen.nav.RouteCodec
@@ -414,11 +415,6 @@ class MainActivity : AppCompatActivity() {
         routeLoading = true
         routeError = null
         val key = BuildConfig.ORS_API_KEY
-        if (key.isBlank()) {
-                routeLoading = false
-                routeError = "Route provider is not configured in this build"
-                return
-        }
         locationTracker.startTracking()
         val latitude = destination.latitude
         val longitude = destination.longitude
@@ -438,12 +434,17 @@ class MainActivity : AppCompatActivity() {
                     routeLoading = false
                     return@launch
                 }
-                val result = HttpRoutingProvider(
-                    RoutingProviderConfig(
-                        endpoint = "https://api.openrouteservice.org/v2/directions/driving-car/geojson",
-                        apiKey = key,
-                    ),
-                ).route(
+                val provider = if (key.isBlank()) {
+                    OsrmRoutingProvider()
+                } else {
+                    HttpRoutingProvider(
+                        RoutingProviderConfig(
+                            endpoint = "https://api.openrouteservice.org/v2/directions/driving-car/geojson",
+                            apiKey = key,
+                        ),
+                    )
+                }
+                val result = provider.route(
                     RouteCoordinate(location.latitude, location.longitude),
                     RouteCoordinate(latitude, longitude),
                 )

@@ -26,7 +26,9 @@ object DestinationLinkParser {
         Regex("""(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)""")
 
     fun parse(sharedText: String): SharedDestination? {
-        val source = sharedText.trim()
+        val source = URL_RE.find(sharedText.trim())?.value
+            ?.trimEnd('.', ',', ';', ')', ']')
+            ?: sharedText.trim()
         if (source.isEmpty()) return null
 
         val uri = runCatching { Uri.parse(source) }.getOrNull()
@@ -68,4 +70,6 @@ object DestinationLinkParser {
             ?.groupValues
             ?.getOrNull(1)
             ?.let { URLDecoder.decode(it, Charsets.UTF_8.name()) }
+
+    private val URL_RE = Regex("""https?://\S+""", RegexOption.IGNORE_CASE)
 }

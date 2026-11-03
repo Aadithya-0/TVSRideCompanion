@@ -51,9 +51,11 @@ class RideService : android.app.Service() {
     private var ble: ScooterBleService? = null
     private var locationTracker: LocationTracker? = null
     private var tripActive = false
-    private var tripPaused = false
     private var tripLocationJob: Job? = null
     private var rpmSamples = 0
+    private var tripArmed = false
+    private var autoStartBlocked = false
+    private var lastTripLocation: android.location.Location? = null
     private var routeGuidanceJob: Job? = null
     private var routeOffRouteNotified = false
     /** Parents the per-connection collectors so a reconnect or disconnect
@@ -176,8 +178,7 @@ class RideService : android.app.Service() {
             ACTION_START_ROUTE_NAV -> startRouteNavigation(intent.getStringExtra(EXTRA_ROUTE))
             ACTION_STOP_ROUTE_NAV -> stopRouteNavigation()
             ACTION_UPDATE_RIDER_NAME -> sendRiderNameIfConnected()
-            ACTION_START_TRIP -> startTrip()
-            ACTION_PAUSE_TRIP -> pauseTrip()
+            ACTION_START_TRIP -> armTrip()
             ACTION_END_TRIP -> endTrip()
             ACTION_DISCONNECT -> {
                 teardown()
@@ -230,6 +231,8 @@ class RideService : android.app.Service() {
      * SecurityException from `connectGatt` would otherwise kill the service.
      */
     fun connect(address: String, model: VehicleModel): Boolean {
+        autoStartBlocked = false
+        rpmSamples = 0
         // Stop the previous link first: same scope, so a second connect without
         // this leaves both keepalive loops running and the cluster gets double
         // pings.
@@ -402,6 +405,8 @@ class RideService : android.app.Service() {
                             callObserver = null
                             rpmSamples = 0
                             if (tripActive) endTrip()
+                            tripArmed = false
+                            autoStartBlocked = false
                             bridge?.stopNavigation()
                             notify("Disconnected")
                         }
@@ -417,11 +422,19 @@ class RideService : android.app.Service() {
                         (telemetry.engineRpm ?: 0) >= AUTO_TRIP_RPM
                     ) {
                         rpmSamples++
-                        if (!tripActive && rpmSamples >= AUTO_TRIP_SAMPLES) {
+                        if (
+                            tripArmed &&
+                            !autoStartBlocked &&
+                            !tripActive &&
+                            rpmSamples >= AUTO_TRIP_SAMPLES
+                        ) {
                             startTrip(automatic = true)
                         }
                     } else {
                         rpmSamples = 0
+                        if ((telemetry.engineRpm ?: 0) < AUTO_TRIP_RPM) {
+                            autoStartBlocked = false
+                        }
                     }
                 }
             }
@@ -530,6 +543,26 @@ class RideService : android.app.Service() {
         notify("Guidance stopped")
     }
 
+    private fun armTrip() {
+        if (tripActive) return
+        tripArmed = true
+        if (autoStartBlocked) {
+            Log.i(TAG, "trip armed; waiting for engine-off before restart")
+            return
+        }
+        val telemetry = Session.telemetry.value
+        if (
+            Session.connection.value.state == ConnectionState.CONNECTED &&
+            telemetry.isFresh() &&
+            (telemetry.engineRpm ?: 0) >= AUTO_TRIP_RPM &&
+            rpmSamples >= AUTO_TRIP_SAMPLES
+        ) {
+            startTrip(automatic = false)
+        } else {
+            notify("Recording armed; waiting for engine start")
+        }
+    }
+
     private fun startTrip(automatic: Boolean = false) {
         val telemetry = Session.telemetry.value
         if (
@@ -540,15 +573,10 @@ class RideService : android.app.Service() {
             Log.i(TAG, "trip start ignored: scooter is not actively running")
             return
         }
-        if (tripActive && !tripPaused) return
-        if (tripPaused) {
-            tripPaused = false
-            locationTracker?.startTracking()
-            notify("Trip resumed")
-            Log.i(TAG, "manual trip resumed")
-            return
-        }
+        if (tripActive) return
         tripActive = true
+        tripArmed = true
+        lastTripLocation = null
         Session.attachRideLog(applicationContext)
         Session.setRideMode(true)
         Session.startManualTrip()
@@ -560,15 +588,33 @@ class RideService : android.app.Service() {
             tracker.lastLocation.collect { loc ->
                 if (loc != null && tripActive) {
                     val tel = Session.telemetry.value
-                    val gpsSpeed = loc.takeIf { it.hasSpeed() }?.speed
-                        ?.times(3.6f)?.toInt()?.coerceAtLeast(0)
-                    Session.updateGpsSpeed(gpsSpeed)
-                    Session.addTripPoint(
-                        lat = loc.latitude,
-                        lon = loc.longitude,
-                        speedKmh = gpsSpeed ?: tel.speedKmh ?: 0,
-                        liveRpm = tel.engineRpm ?: 0,
-                    )
+                    val previous = lastTripLocation
+                    if (previous == null) {
+                        lastTripLocation = loc
+                        Session.updateGpsSpeed(0)
+                        Session.addTripPoint(
+                            lat = loc.latitude,
+                            lon = loc.longitude,
+                            speedKmh = 0,
+                            liveRpm = tel.engineRpm ?: 0,
+                        )
+                    } else {
+                        val distanceMeters = previous.distanceTo(loc)
+                        if (distanceMeters >= MIN_POINT_DISTANCE_METERS) {
+                            val elapsedSeconds =
+                                ((loc.time - previous.time).coerceAtLeast(1L)) / 1000.0
+                            val displacementSpeed =
+                                (distanceMeters / elapsedSeconds * 3.6).toInt().coerceIn(0, 150)
+                            lastTripLocation = loc
+                            Session.updateGpsSpeed(displacementSpeed)
+                            Session.addTripPoint(
+                                lat = loc.latitude,
+                                lon = loc.longitude,
+                                speedKmh = displacementSpeed,
+                                liveRpm = tel.engineRpm ?: 0,
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -576,18 +622,13 @@ class RideService : android.app.Service() {
         Log.i(TAG, "manual trip started")
     }
 
-    private fun pauseTrip() {
-        if (!tripActive || tripPaused) return
-        tripPaused = true
-        locationTracker?.stopTracking()
-        notify("Trip paused")
-        Log.i(TAG, "manual trip paused")
-    }
-
     private fun endTrip() {
         if (!tripActive) return
         tripActive = false
-        tripPaused = false
+        tripArmed = false
+        autoStartBlocked = true
+        rpmSamples = 0
+        lastTripLocation = null
         tripLocationJob?.cancel()
         tripLocationJob = null
         locationTracker?.stopTracking()
@@ -600,7 +641,8 @@ class RideService : android.app.Service() {
     private fun teardown() {
         if (tripActive) endTrip()
         tripActive = false
-        tripPaused = false
+        tripArmed = false
+        lastTripLocation = null
         tripLocationJob?.cancel()
         tripLocationJob = null
         routeGuidanceJob?.cancel()
@@ -691,6 +733,7 @@ class RideService : android.app.Service() {
         private const val TAG = "RideService"
         private const val AUTO_TRIP_RPM = 1_500
         private const val AUTO_TRIP_SAMPLES = 3
+        private const val MIN_POINT_DISTANCE_METERS = 8f
         const val CHANNEL = "ride"
         const val NOTIF_ID = 1
         const val ACTION_CONNECT = "dev.tvsopen.CONNECT"
@@ -704,7 +747,6 @@ class RideService : android.app.Service() {
         const val ACTION_UPDATE_RIDER_NAME = "dev.tvsopen.UPDATE_RIDER_NAME"
         const val ACTION_DISCONNECT = "dev.tvsopen.DISCONNECT"
         const val ACTION_START_TRIP = "dev.tvsopen.START_TRIP"
-        const val ACTION_PAUSE_TRIP = "dev.tvsopen.PAUSE_TRIP"
         const val ACTION_END_TRIP = "dev.tvsopen.END_TRIP"
 
         const val EXTRA_ADDRESS = "address"

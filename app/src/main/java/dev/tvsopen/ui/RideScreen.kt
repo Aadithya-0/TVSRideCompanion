@@ -27,6 +27,10 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -57,7 +61,15 @@ fun RideScreen(
     val tripRunning = rides.firstOrNull()?.inProgress == true
     val connection by Session.connection.collectAsState()
     val engineRunning = telemetry.isFresh() && (telemetry.engineRpm ?: 0) >= 1_500
-    val canStart = connection.state == ConnectionState.CONNECTED && engineRunning
+    val canStart = connection.state == ConnectionState.CONNECTED && !tripRunning
+    val startedAt = rides.firstOrNull()?.takeIf { it.inProgress }?.startedAt
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(startedAt) {
+        while (startedAt != null) {
+            now = System.currentTimeMillis()
+            kotlinx.coroutines.delay(1000L)
+        }
+    }
 
     fun send(action: String) {
         runCatching {
@@ -174,7 +186,7 @@ fun RideScreen(
                         send(RideService.ACTION_START_TRIP)
                     },
                     modifier = Modifier.size(56.dp),
-                    enabled = !tripRunning && canStart,
+                    enabled = canStart,
                     colors = IconButtonDefaults.filledIconButtonColors(
                         containerColor = MaterialTheme.colorScheme.primary,
                         contentColor = MaterialTheme.colorScheme.onPrimary,
@@ -204,14 +216,41 @@ fun RideScreen(
 
         Spacer(Modifier.height(8.dp))
         Text(
+            formatElapsed(startedAt?.let { now - it } ?: 0L),
+            style = MaterialTheme.typography.headlineSmall,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.align(Alignment.CenterHorizontally),
+        )
+        Text(
+            when {
+                tripRunning -> "Elapsed ride time"
+                connection.state != ConnectionState.CONNECTED -> "Connect to arm recording"
+                engineRunning -> "Ready — tap Start to arm"
+                else -> "Start is armed before the engine runs",
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.align(Alignment.CenterHorizontally),
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
             if (tripRunning) "Stop recording"
-            else "Start recording when engine is running",
+            else "Arm recording; engine start begins the ride",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.align(Alignment.CenterHorizontally),
         )
         Spacer(Modifier.height(28.dp))
     }
+}
+
+private fun formatElapsed(millis: Long): String {
+    val totalSeconds = (millis / 1000L).coerceAtLeast(0L)
+    return "%02d:%02d:%02d".format(
+        totalSeconds / 3600L,
+        (totalSeconds / 60L) % 60L,
+        totalSeconds % 60L,
+    )
 }
 
 @Composable

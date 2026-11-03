@@ -54,4 +54,16 @@ class RideLogTest {
         assertEquals(10L, ride.startedAt)
         assertEquals(1, ride.points.size)
     }
+
+    @Test
+    fun `finishing twice persists only one ride`() {
+        val log = RideLog(context)
+        log.start(now = 10L)
+        log.finish(now = 20L)
+        log.finish(now = 30L)
+
+        assertEquals(1, log.totalRides)
+        assertEquals(1, log.rides.value.size)
+        assertFalse(log.rides.value.single().inProgress)
+    }
 }

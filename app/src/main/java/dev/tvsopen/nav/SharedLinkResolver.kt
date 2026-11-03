@@ -36,6 +36,9 @@ class SharedLinkResolver {
                             if (!isGoogleMapsHost(URL(next).host)) {
                                 error("share link redirected outside Google Maps")
                             }
+                            DestinationLinkParser.parse(next)
+                                ?.takeIf { it.hasCoordinates }
+                                ?.let { return@withContext Result.success(it) }
                             current = next
                             return@repeat
                         }

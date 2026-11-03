@@ -39,6 +39,7 @@ import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Polyline
 import org.osmdroid.views.overlay.Marker
+import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -63,6 +64,7 @@ fun RideDetailScreen(
     val context = LocalContext.current
     val dateFormatter = remember { SimpleDateFormat("d MMM yyyy, h:mm a", Locale.getDefault()) }
     val startLabel = remember(ride.startedAt) { dateFormatter.format(Date(ride.startedAt)) }
+    val meaningfulMovement = ride.points.size >= 2 && hasMovement(ride.points)
 
     Column(
         modifier
@@ -97,7 +99,7 @@ fun RideDetailScreen(
             }
         }
         // ─── Map ───────────────────────────────────────────────────────────
-        if (ride.points.size >= 2 && hasMovement(ride.points)) {
+        if (ride.points.isNotEmpty()) {
             Surface(
                 Modifier
                     .fillMaxWidth()
@@ -107,7 +109,15 @@ fun RideDetailScreen(
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
             ) {
                 AndroidView(
-                    factory = { ctx -> buildMapView(ctx, ride.points) },
+                    factory = {
+                        ctx ->
+                        val mapPoints = if (meaningfulMovement) {
+                            ride.points
+                        } else {
+                            listOf(ride.points.first())
+                        }
+                        buildMapView(ctx, mapPoints)
+                    },
                     update = { /* static snapshot, no update needed */ },
                 )
             }
@@ -190,8 +200,16 @@ fun RideDetailScreen(
                     Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    StatCell(Modifier.weight(1f), "Top Speed", "${ride.topSpeedKmh} km/h")
-                    StatCell(Modifier.weight(1f), "Avg Speed", "${ride.avgSpeedKmh} km/h")
+                    StatCell(
+                        Modifier.weight(1f),
+                        "Top Speed",
+                        "${if (meaningfulMovement) ride.topSpeedKmh else 0} km/h",
+                    )
+                    StatCell(
+                        Modifier.weight(1f),
+                        "Avg Speed",
+                        "${if (meaningfulMovement) ride.avgSpeedKmh else 0} km/h",
+                    )
                     StatCell(Modifier.weight(1f), "Top RPM", "${ride.topRpm}")
                 }
             }
@@ -257,9 +275,10 @@ private fun buildMapView(context: Context, points: List<TrackPoint>): MapView {
     Configuration.getInstance().userAgentValue = context.packageName
 
     val map = MapView(context).apply {
-        // Keep route rendering fully on-device. Enabling tile downloads would
-        // disclose the viewed ride area to a third-party tile server.
-        setUseDataConnection(false)
+        // Map tiles are the only networked part of ride history. Ride points
+        // remain local; the tile provider receives only the viewed tile area.
+        setTileSource(TileSourceFactory.MAPNIK)
+        setUseDataConnection(true)
         setMultiTouchControls(true)
         isTilesScaledToDpi = true
     }

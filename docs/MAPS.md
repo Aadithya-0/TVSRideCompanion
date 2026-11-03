@@ -11,31 +11,36 @@ The direct-navigation mode requires network access for:
 
 - following short Google Maps share-link redirects;
 - route calculation;
-- destination/map preview tiles, when enabled.
+- destination/map preview tiles, when enabled;
+- surrounding map tiles for ride-history detail screens.
 
 Ride history, BLE telemetry, and saved route points remain local. The routing
 provider is intentionally abstracted so an ORS-compatible, Valhalla-compatible,
 or self-hosted endpoint can be selected without changing the route-following
 logic.
 
-`HttpRoutingProvider` owns the network boundary and accepts an injected
-endpoint/API key. It does not ship a provider key or silently select a
-third-party service, so the UI can validate a shared destination before routing
-is enabled. The current build reads `ORS_API_KEY` from the build environment;
-without it, share parsing and local history remain available but route requests
-are rejected locally.
+`HttpRoutingProvider` owns the OpenRouteService-compatible network boundary and
+accepts an injected endpoint/API key. When `ORS_API_KEY` is absent, the app uses
+the public OSRM demo endpoint as a no-key personal-use fallback. Both providers
+receive the phone's origin and the shared destination; neither receives ride
+history or BLE telemetry. Provider availability and HTTP failures are surfaced
+in the route card rather than being presented as missing coordinates.
 
-Do not use the public OpenStreetMap tile server as an unrestricted mobile tile
-backend. OSM data is open, but the public tile service has capacity and caching
-rules. Use a provider with mobile-app terms, a bounded cache, or self-hosted
-tiles, and show required attribution.
+Ride-history detail uses the standard OpenStreetMap-compatible MAPNIK tile
+source to show surrounding roads and a start pin. This is an explicit network
+boundary: the tile server sees the tiles viewed around the saved start point,
+but the ride coordinates and history remain in the app. A production
+distribution should replace this with a provider whose mobile-app terms,
+attribution, and rate limits are appropriate; this personal build does not
+silently upload ride data.
 
 ## Share flow
 
 1. Share a Google Maps destination to TVSRide.
 2. Parse coordinates from `geo:`, `q=`, `query=`, or normal Maps URL formats.
-3. If the share contains only a place name or short link, show a confirmation
-   state rather than silently geocoding an uncertain location.
+3. If the share is a `maps.app.goo.gl` short link, follow only validated Google
+   Maps redirects and parse coordinates from the redirect URL before enabling
+   Preview route.
 4. Show the destination, route distance, ETA, and a small preview.
 5. Start guidance only after the rider confirms.
 
