@@ -90,6 +90,7 @@ fun HomeScreen(
     routePreview: RoutePreview? = null,
     routeLoading: Boolean = false,
     routeError: String? = null,
+    destinationResolving: Boolean = false,
     onStartGuidance: (RoutePreview) -> Unit = {},
     hasNotificationAccess: Boolean = true,
     onOpenNotificationAccess: () -> Unit = {},
@@ -115,6 +116,7 @@ fun HomeScreen(
                 onStartGuidance,
                 routeLoading,
                 routeError,
+                destinationResolving,
             )
         }
 
@@ -180,6 +182,7 @@ private fun DestinationPreviewCard(
     onStartGuidance: (RoutePreview) -> Unit,
     routeLoading: Boolean,
     routeError: String?,
+    destinationResolving: Boolean,
 ) {
     Surface(
         Modifier.fillMaxWidth(),
@@ -206,6 +209,7 @@ private fun DestinationPreviewCard(
             }
             Text(
                 when {
+                    destinationResolving -> "Resolving Google Maps destination…"
                     routeLoading -> "Getting your current location and route…"
                     routeError != null -> routeError
                     routePreview != null -> {
@@ -224,12 +228,13 @@ private fun DestinationPreviewCard(
                         if (routePreview == null) onPreviewRoute(destination)
                         else onStartGuidance(routePreview)
                     },
-                    enabled = destination.hasCoordinates && !routeLoading,
+                    enabled = destination.hasCoordinates && !routeLoading && !destinationResolving,
                     modifier = Modifier.weight(1f),
                 ) {
                     Text(
                         when {
                             routeLoading -> "Loading…"
+                            destinationResolving -> "Resolving…"
                             routePreview == null -> "Preview route"
                             else -> "Start guidance"
                         },

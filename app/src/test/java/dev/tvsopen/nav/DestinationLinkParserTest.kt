@@ -39,4 +39,15 @@ class DestinationLinkParserTest {
         assertFalse(destination!!.hasCoordinates)
         assertEquals("Example Cafe", destination.label)
     }
+
+    @Test
+    fun `parses coordinates embedded in a Google Maps place redirect`() {
+        val destination = DestinationLinkParser.parse(
+            "https://www.google.com/maps/place/Example/@9.9639148,76.4058745,17z/data",
+        )
+
+        assertNotNull(destination)
+        assertEquals(9.9639148, destination!!.latitude!!, 0.00001)
+        assertEquals(76.4058745, destination.longitude!!, 0.00001)
+    }
 }

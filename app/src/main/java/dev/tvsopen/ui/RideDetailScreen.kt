@@ -97,7 +97,7 @@ fun RideDetailScreen(
             }
         }
         // ─── Map ───────────────────────────────────────────────────────────
-        if (ride.points.isNotEmpty()) {
+        if (ride.points.size >= 2 && hasMovement(ride.points)) {
             Surface(
                 Modifier
                     .fillMaxWidth()
@@ -127,14 +127,15 @@ fun RideDetailScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Text(
-                        if (ride.distanceKm == 0.0) "No GPS fix recorded"
-                        else "No GPS track recorded",
+                        if (ride.points.isNotEmpty()) "Stationary ride"
+                        else "No GPS fix recorded",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Text(
-                        if (ride.distanceKm == 0.0) {
-                            "Telemetry and stationary ride stats were saved"
+                        if (ride.points.isNotEmpty()) {
+                            val start = ride.points.first()
+                            "Start location saved: %.5f, %.5f".format(start.lat, start.lon)
                         } else {
                             "Grant location permission to record routes"
                         },
@@ -146,7 +147,7 @@ fun RideDetailScreen(
         }
 
         // ─── Speed legend ──────────────────────────────────────────────────
-        if (ride.points.isNotEmpty()) {
+        if (ride.points.size >= 2 && hasMovement(ride.points)) {
             Spacer(Modifier.height(10.dp))
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 16.dp),
@@ -199,6 +200,12 @@ fun RideDetailScreen(
         Spacer(Modifier.height(28.dp))
     }
 }
+
+private fun hasMovement(points: List<TrackPoint>): Boolean =
+    points.zipWithNext().any { (a, b) ->
+        kotlin.math.abs(a.lat - b.lat) > 0.0001 ||
+            kotlin.math.abs(a.lon - b.lon) > 0.0001
+    }
 
 @Composable
 private fun SpeedBand(range: String, unit: String, @Suppress("UNUSED_PARAMETER") androidColor: Int) {

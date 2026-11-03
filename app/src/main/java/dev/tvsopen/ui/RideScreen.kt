@@ -15,7 +15,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.FilledIconButton
@@ -27,10 +26,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -38,14 +34,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.tvsopen.session.Telemetry
+import dev.tvsopen.session.Session
+import dev.tvsopen.transport.ConnectionState
 import dev.tvsopen.transport.RideService
 import dev.tvsopen.ui.theme.NumberStyle
 
 /**
  * Compact ride-mode overlay shown when a trip is active.
  *
- * Displays live telemetry (speed, RPM, fuel, DTE) and three trip-control
- * buttons (start/pause/stop). Sends intents to [RideService] — no state
+ * Displays live telemetry (speed, RPM, fuel, DTE) and engine-synchronized
+ * trip controls. Sends intents to [RideService] — no state
  * is owned here, only observed from Session via [telemetry].
  */
 @Composable
@@ -55,6 +53,11 @@ fun RideScreen(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    val rides by Session.rides.collectAsState()
+    val tripRunning = rides.firstOrNull()?.inProgress == true
+    val connection by Session.connection.collectAsState()
+    val engineRunning = telemetry.isFresh() && (telemetry.engineRpm ?: 0) >= 1_500
+    val canStart = connection.state == ConnectionState.CONNECTED && engineRunning
 
     fun send(action: String) {
         runCatching {
@@ -63,9 +66,6 @@ fun RideScreen(
             )
         }
     }
-
-    var tripRunning by rememberSaveable { mutableStateOf(false) }
-    var tripPaused by rememberSaveable { mutableStateOf(false) }
 
     Column(
         modifier
@@ -89,9 +89,12 @@ fun RideScreen(
             }
         }
         Text(
-            if (!tripRunning) "Ready to record a ride"
-            else if (tripPaused) "Paused · location recording suspended"
-            else "Recording ride",
+            when {
+                tripRunning -> "Recording ride · continues in background"
+                connection.state != ConnectionState.CONNECTED -> "Connect to the scooter first"
+                !engineRunning -> "Waiting for engine start"
+                else -> "Ready to record"
+            },
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -168,13 +171,10 @@ fun RideScreen(
                 // Start / Resume
                 FilledIconButton(
                     onClick = {
-                        if (!tripRunning || tripPaused) {
-                            tripRunning = true
-                            tripPaused = false
-                            send(RideService.ACTION_START_TRIP)
-                        }
+                        send(RideService.ACTION_START_TRIP)
                     },
                     modifier = Modifier.size(56.dp),
+                    enabled = !tripRunning && canStart,
                     colors = IconButtonDefaults.filledIconButtonColors(
                         containerColor = MaterialTheme.colorScheme.primary,
                         contentColor = MaterialTheme.colorScheme.onPrimary,
@@ -183,30 +183,10 @@ fun RideScreen(
                     Icon(Icons.Filled.PlayArrow, contentDescription = "Start / Resume trip")
                 }
 
-                // Pause
-                FilledIconButton(
-                    onClick = {
-                        if (tripRunning && !tripPaused) {
-                            tripPaused = true
-                            send(RideService.ACTION_PAUSE_TRIP)
-                        }
-                    },
-                    modifier = Modifier.size(56.dp),
-                    enabled = tripRunning && !tripPaused,
-                    colors = IconButtonDefaults.filledIconButtonColors(
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                    ),
-                ) {
-                    Icon(Icons.Filled.Pause, contentDescription = "Pause trip")
-                }
-
                 // Stop
                 FilledIconButton(
                     onClick = {
                         if (tripRunning) {
-                            tripRunning = false
-                            tripPaused = false
                             send(RideService.ACTION_END_TRIP)
                         }
                     },
@@ -224,9 +204,8 @@ fun RideScreen(
 
         Spacer(Modifier.height(8.dp))
         Text(
-            if (!tripRunning) "Start      Pause      Stop"
-            else if (tripPaused) "Resume      Stop"
-            else "Pause      Stop",
+            if (tripRunning) "Stop recording"
+            else "Start recording when engine is running",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.align(Alignment.CenterHorizontally),

@@ -73,6 +73,7 @@ class MainActivity : AppCompatActivity() {
     private var routePreview by mutableStateOf<RoutePreview?>(null)
     private var routeLoading by mutableStateOf(false)
     private var routeError by mutableStateOf<String?>(null)
+    private var destinationResolving by mutableStateOf(false)
     private val locationTracker by lazy { LocationTracker(applicationContext) }
 
     private val permissionLauncher =
@@ -328,6 +329,7 @@ class MainActivity : AppCompatActivity() {
                             routePreview = routePreview,
                             routeLoading = routeLoading,
                             routeError = routeError,
+                            destinationResolving = destinationResolving,
                             onStartGuidance = { startRouteGuidance(it) },
                             hasNotificationAccess = hasNotificationAccess,
                             onOpenNotificationAccess = { openNotificationAccess() },
@@ -390,11 +392,19 @@ class MainActivity : AppCompatActivity() {
         sharedDestination = parsed
         routePreview = null
         routeError = null
+        destinationResolving = false
         if (parsed != null) {
+            destinationResolving = parsed.source.startsWith("https://maps.app.goo.gl/")
             lifecycleScope.launch {
-                SharedLinkResolver().resolve(parsed).onSuccess { resolved ->
-                    if (resolved != parsed) sharedDestination = resolved
-                }
+                SharedLinkResolver().resolve(parsed)
+                    .onSuccess { resolved ->
+                        sharedDestination = resolved
+                        routeError = null
+                    }
+                    .onFailure { error ->
+                        routeError = error.message ?: "Google Maps link could not be resolved"
+                    }
+                destinationResolving = false
             }
         }
     }
