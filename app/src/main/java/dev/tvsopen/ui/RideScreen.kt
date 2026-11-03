@@ -226,7 +226,7 @@ fun RideScreen(
                 tripRunning -> "Elapsed ride time"
                 connection.state != ConnectionState.CONNECTED -> "Connect to arm recording"
                 engineRunning -> "Ready — tap Start to arm"
-                else -> "Start is armed before the engine runs",
+                else -> "Start is armed before the engine runs"
             },
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
