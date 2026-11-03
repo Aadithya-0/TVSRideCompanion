@@ -36,6 +36,8 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import dev.tvsopen.Nucleus
 import dev.tvsopen.BuildConfig
 import dev.tvsopen.log.Log
@@ -69,6 +71,8 @@ class MainActivity : AppCompatActivity() {
 
     private var sharedDestination by mutableStateOf<SharedDestination?>(null)
     private var routePreview by mutableStateOf<RoutePreview?>(null)
+    private var routeLoading by mutableStateOf(false)
+    private var routeError by mutableStateOf<String?>(null)
     private val locationTracker by lazy { LocationTracker(applicationContext) }
 
     private val permissionLauncher =
@@ -304,8 +308,14 @@ class MainActivity : AppCompatActivity() {
                                 )
                             },
                             onRideModeChange = { on ->
-                                RidePrefs.load(this@MainActivity).updateRideMode(on)
-                                Session.setRideMode(on)
+                                val canEnable =
+                                    connection.state == ConnectionState.CONNECTED &&
+                                        telemetry.isFresh() &&
+                                        (telemetry.engineRpm ?: 0) >= 1_500
+                                if (!on || canEnable) {
+                                    RidePrefs.load(this@MainActivity).updateRideMode(on)
+                                    Session.setRideMode(on)
+                                }
                             },
                             onOpenOverview = { tab = 3 },
                             onOpenParked = { tab = 3 },
@@ -316,6 +326,8 @@ class MainActivity : AppCompatActivity() {
                                 previewRoute(it)
                             },
                             routePreview = routePreview,
+                            routeLoading = routeLoading,
+                            routeError = routeError,
                             onStartGuidance = { startRouteGuidance(it) },
                             hasNotificationAccess = hasNotificationAccess,
                             onOpenNotificationAccess = { openNotificationAccess() },
@@ -377,6 +389,7 @@ class MainActivity : AppCompatActivity() {
         val parsed = DestinationLinkParser.parse(sharedText)
         sharedDestination = parsed
         routePreview = null
+        routeError = null
         if (parsed != null) {
             lifecycleScope.launch {
                 SharedLinkResolver().resolve(parsed).onSuccess { resolved ->
@@ -387,38 +400,50 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun previewRoute(destination: SharedDestination) {
+        if (routeLoading) return
+        routeLoading = true
+        routeError = null
         val key = BuildConfig.ORS_API_KEY
         if (key.isBlank()) {
-            Toast.makeText(this, "Set ORS_API_KEY to preview routes", Toast.LENGTH_LONG).show()
-            return
+                routeLoading = false
+                routeError = "Route provider is not configured in this build"
+                return
         }
         locationTracker.startTracking()
-        val location = locationTracker.lastLocation.value
-        if (location == null) {
-            Toast.makeText(this, "Waiting for a location fix", Toast.LENGTH_LONG).show()
-            return
-        }
         val latitude = destination.latitude
         val longitude = destination.longitude
-        if (latitude == null || longitude == null) return
+        if (latitude == null || longitude == null) {
+                routeLoading = false
+                routeError = "Google Maps did not include coordinates in this share"
+                return
+        }
         lifecycleScope.launch {
-            val result = HttpRoutingProvider(
-                RoutingProviderConfig(
-                    endpoint = "https://api.openrouteservice.org/v2/directions/driving-car/geojson",
-                    apiKey = key,
-                ),
-            ).route(
-                RouteCoordinate(location.latitude, location.longitude),
-                RouteCoordinate(latitude, longitude),
-            )
-            result.onSuccess { routePreview = it }
-                .onFailure {
-                    Toast.makeText(
-                        this@MainActivity,
-                        "Route preview failed",
-                        Toast.LENGTH_LONG,
-                    ).show()
+                val location = kotlinx.coroutines.withTimeoutOrNull(15_000) {
+                    locationTracker.lastLocation
+                        .filterNotNull()
+                        .first()
                 }
+                if (location == null) {
+                    routeError = "Waiting for a current location fix"
+                    routeLoading = false
+                    return@launch
+                }
+                val result = HttpRoutingProvider(
+                    RoutingProviderConfig(
+                        endpoint = "https://api.openrouteservice.org/v2/directions/driving-car/geojson",
+                        apiKey = key,
+                    ),
+                ).route(
+                    RouteCoordinate(location.latitude, location.longitude),
+                    RouteCoordinate(latitude, longitude),
+                )
+                result.onSuccess {
+                    routePreview = it
+                    routeError = null
+                }.onFailure { error ->
+                    routeError = error.message ?: "Route preview failed"
+                }
+                routeLoading = false
         }
     }
 

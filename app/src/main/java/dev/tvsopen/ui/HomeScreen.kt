@@ -88,6 +88,8 @@ fun HomeScreen(
     onClearDestination: () -> Unit = {},
     onPreviewRoute: (SharedDestination) -> Unit = {},
     routePreview: RoutePreview? = null,
+    routeLoading: Boolean = false,
+    routeError: String? = null,
     onStartGuidance: (RoutePreview) -> Unit = {},
     hasNotificationAccess: Boolean = true,
     onOpenNotificationAccess: () -> Unit = {},
@@ -111,6 +113,8 @@ fun HomeScreen(
                 onPreviewRoute,
                 routePreview,
                 onStartGuidance,
+                routeLoading,
+                routeError,
             )
         }
 
@@ -174,6 +178,8 @@ private fun DestinationPreviewCard(
     onPreviewRoute: (SharedDestination) -> Unit,
     routePreview: RoutePreview?,
     onStartGuidance: (RoutePreview) -> Unit,
+    routeLoading: Boolean,
+    routeError: String?,
 ) {
     Surface(
         Modifier.fillMaxWidth(),
@@ -199,13 +205,15 @@ private fun DestinationPreviewCard(
                 }
             }
             Text(
-                if (routePreview != null) {
+                when {
+                    routeLoading -> "Getting your current location and route…"
+                    routeError != null -> routeError
+                    routePreview != null -> {
                     "${routePreview.distanceMeters / 1000.0} km · " +
                         "${routePreview.durationSeconds / 60} min estimated"
-                } else if (destination.hasCoordinates) {
-                    "Ready for route preview"
-                } else {
-                    "This link needs location confirmation before routing"
+                    }
+                    destination.hasCoordinates -> "Ready for route preview"
+                    else -> "Google Maps did not include coordinates in this share"
                 },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -216,10 +224,16 @@ private fun DestinationPreviewCard(
                         if (routePreview == null) onPreviewRoute(destination)
                         else onStartGuidance(routePreview)
                     },
-                    enabled = destination.hasCoordinates,
+                    enabled = destination.hasCoordinates && !routeLoading,
                     modifier = Modifier.weight(1f),
                 ) {
-                    Text(if (routePreview == null) "Preview route" else "Start guidance")
+                    Text(
+                        when {
+                            routeLoading -> "Loading…"
+                            routePreview == null -> "Preview route"
+                            else -> "Start guidance"
+                        },
+                    )
                 }
                 TextButton(onClick = onClear) { Text("Dismiss") }
             }

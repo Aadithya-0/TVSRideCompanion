@@ -53,6 +53,7 @@ class RideService : android.app.Service() {
     private var tripActive = false
     private var tripPaused = false
     private var tripLocationJob: Job? = null
+    private var rpmSamples = 0
     private var routeGuidanceJob: Job? = null
     private var routeOffRouteNotified = false
     /** Parents the per-connection collectors so a reconnect or disconnect
@@ -399,9 +400,28 @@ class RideService : android.app.Service() {
                             ringingJob = null
                             callObserver?.stop()
                             callObserver = null
+                            rpmSamples = 0
+                            if (tripActive) endTrip()
+                            bridge?.stopNavigation()
                             notify("Disconnected")
                         }
                         else -> Unit
+                    }
+                }
+            }
+            launch {
+                Session.telemetry.collect { telemetry ->
+                    if (
+                        Session.connection.value.state == ConnectionState.CONNECTED &&
+                        telemetry.isFresh() &&
+                        (telemetry.engineRpm ?: 0) >= AUTO_TRIP_RPM
+                    ) {
+                        rpmSamples++
+                        if (!tripActive && rpmSamples >= AUTO_TRIP_SAMPLES) {
+                            startTrip(automatic = true)
+                        }
+                    } else {
+                        rpmSamples = 0
                     }
                 }
             }
@@ -510,7 +530,16 @@ class RideService : android.app.Service() {
         notify("Guidance stopped")
     }
 
-    private fun startTrip() {
+    private fun startTrip(automatic: Boolean = false) {
+        val telemetry = Session.telemetry.value
+        if (
+            Session.connection.value.state != ConnectionState.CONNECTED ||
+            !telemetry.isFresh() ||
+            (telemetry.engineRpm ?: 0) < AUTO_TRIP_RPM
+        ) {
+            Log.i(TAG, "trip start ignored: scooter is not actively running")
+            return
+        }
         if (tripActive && !tripPaused) return
         if (tripPaused) {
             tripPaused = false
@@ -521,6 +550,7 @@ class RideService : android.app.Service() {
         }
         tripActive = true
         Session.attachRideLog(applicationContext)
+        Session.setRideMode(true)
         Session.startManualTrip()
         val tracker = locationTracker ?: LocationTracker(applicationContext).also { locationTracker = it }
         tracker.startTracking()
@@ -542,7 +572,7 @@ class RideService : android.app.Service() {
                 }
             }
         }
-        notify("Trip started")
+        notify(if (automatic) "Ride detected" else "Trip started")
         Log.i(TAG, "manual trip started")
     }
 
@@ -562,11 +592,13 @@ class RideService : android.app.Service() {
         tripLocationJob = null
         locationTracker?.stopTracking()
         Session.endManualTrip()
+        Session.setRideMode(false)
         notify("Trip saved")
         Log.i(TAG, "manual trip ended")
     }
 
     private fun teardown() {
+        if (tripActive) endTrip()
         tripActive = false
         tripPaused = false
         tripLocationJob?.cancel()
@@ -657,6 +689,8 @@ class RideService : android.app.Service() {
 
     companion object {
         private const val TAG = "RideService"
+        private const val AUTO_TRIP_RPM = 1_500
+        private const val AUTO_TRIP_SAMPLES = 3
         const val CHANNEL = "ride"
         const val NOTIF_ID = 1
         const val ACTION_CONNECT = "dev.tvsopen.CONNECT"

@@ -218,14 +218,6 @@ object Session {
         // onFrame fills it from the first 0x10 that carries an odometer.
         if (isConnected && !wasConnected) {
             _telemetry.value = _telemetry.value.copy(odometerAtConnectKm = null)
-            rideLog?.start()
-            _rides.value = rideLog?.rides?.value ?: _rides.value
-        }
-        if (!isConnected && wasConnected) {
-            rideLog?.finish()
-            _rides.value = rideLog?.rides?.value ?: _rides.value
-            _totalRides.value = rideLog?.totalRides ?: _totalRides.value
-            _totalRideDistanceKm.value = rideLog?.totalDistanceKm ?: _totalRideDistanceKm.value
         }
 
         _connection.value = ConnectionState1(state, model, address)

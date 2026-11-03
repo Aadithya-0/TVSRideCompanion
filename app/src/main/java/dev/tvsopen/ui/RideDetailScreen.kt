@@ -38,6 +38,7 @@ import org.osmdroid.config.Configuration
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Polyline
+import org.osmdroid.views.overlay.Marker
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -259,6 +260,11 @@ private fun buildMapView(context: Context, points: List<TrackPoint>): MapView {
     if (points.size < 2) {
         val center = points.firstOrNull()
         if (center != null) {
+            map.overlays += Marker(map).apply {
+                position = GeoPoint(center.lat, center.lon)
+                title = "Ride start"
+                setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+            }
             map.controller.setZoom(15.0)
             map.controller.setCenter(GeoPoint(center.lat, center.lon))
         }
