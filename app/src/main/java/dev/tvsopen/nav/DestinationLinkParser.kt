@@ -1,6 +1,7 @@
 package dev.tvsopen.nav
 
 import android.net.Uri
+import java.net.URLDecoder
 
 /**
  * Extracts a destination from common Google Maps share formats without
@@ -29,17 +30,21 @@ object DestinationLinkParser {
         if (source.isEmpty()) return null
 
         val uri = runCatching { Uri.parse(source) }.getOrNull()
-        val queryPair = uri?.getQueryParameter("query")
+        val queryValue = uri?.getQueryParameter("query")
+            ?: rawQueryParameter(source, "query")
+        val qValue = uri?.getQueryParameter("q")
+            ?: rawQueryParameter(source, "q")
+        val queryPair = queryValue
             ?.let(::parsePair)
-            ?: uri?.getQueryParameter("q")?.let(::parsePair)
+            ?: qValue?.let(::parsePair)
         val embeddedPair = COORDINATE_RE.find(source)?.let {
             it.groupValues[1].toDoubleOrNull() to it.groupValues[2].toDoubleOrNull()
         } ?: PAIR_RE.find(source)?.let {
             it.groupValues[1].toDoubleOrNull() to it.groupValues[2].toDoubleOrNull()
         }
         val pair = queryPair ?: embeddedPair
-        val label = uri?.getQueryParameter("q")
-            ?.takeUnless { it.matches(PAIR_RE) }
+        val label = (qValue ?: queryValue)
+            ?.takeUnless { parsePair(it) != null }
             ?.takeIf { it.isNotBlank() }
 
         return SharedDestination(
@@ -56,4 +61,11 @@ object DestinationLinkParser {
         val lon = match.groupValues[2].toDoubleOrNull() ?: return null
         return lat to lon
     }
+
+    private fun rawQueryParameter(source: String, key: String): String? =
+        Regex("""(?:[?&])${Regex.escape(key)}=([^&#]*)""")
+            .find(source)
+            ?.groupValues
+            ?.getOrNull(1)
+            ?.let { URLDecoder.decode(it, Charsets.UTF_8.name()) }
 }
