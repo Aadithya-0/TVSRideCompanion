@@ -30,10 +30,11 @@ class HttpRoutingProviderTest {
         val route = HttpRoutingProvider(RoutingProviderConfig("https://example.test"))
             .parse(payload, RouteCoordinate(11.01, 75.01))
 
-        assertEquals(1234, route.distanceMeters)
-        assertEquals(321, route.durationSeconds)
-        assertEquals(2, route.geometry.size)
-        assertEquals("Turn left onto Example Road", route.steps.single().instruction)
-        assertEquals(RouteCoordinate(11.01, 75.01), route.steps.single().coordinate)
+        assertEquals("distance", 1234, route.distanceMeters)
+        assertEquals("duration", 321, route.durationSeconds)
+        assertEquals("geometry size", 2, route.geometry.size)
+        assertEquals("first geometry point", RouteCoordinate(11.0, 75.0), route.geometry.first())
+        assertEquals("instruction", "Turn left onto Example Road", route.steps.single().instruction)
+        assertEquals("step coordinate", RouteCoordinate(11.01, 75.01), route.steps.single().coordinate)
     }
 }

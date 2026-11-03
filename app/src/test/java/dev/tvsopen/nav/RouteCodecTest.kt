@@ -18,6 +18,10 @@ class RouteCodecTest {
 
         val decoded = RouteCodec.decode(RouteCodec.encode(route))
 
-        assertEquals(route, decoded)
+        assertEquals("destination", route.destination, decoded.destination)
+        assertEquals("distance", route.distanceMeters, decoded.distanceMeters)
+        assertEquals("duration", route.durationSeconds, decoded.durationSeconds)
+        assertEquals("geometry", route.geometry, decoded.geometry)
+        assertEquals("steps", route.steps, decoded.steps)
     }
 }
