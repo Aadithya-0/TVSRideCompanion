@@ -17,47 +17,51 @@ class SharedLinkResolver {
                 return@withContext Result.success(destination)
             }
             runCatching {
-                var current = destination.source
-                repeat(MAX_REDIRECTS) {
-                    val connection = (URL(current).openConnection() as HttpURLConnection).apply {
-                        requestMethod = "GET"
-                        instanceFollowRedirects = false
-                        connectTimeout = 8_000
-                        readTimeout = 8_000
-                        useCaches = false
-                        setRequestProperty("User-Agent", USER_AGENT)
-                    }
-                    try {
-                        val status = connection.responseCode
-                        if (status in 300..399) {
-                            val location = connection.getHeaderField("Location")
-                                ?: error("share link redirect did not include a destination")
-                            val next = URL(URL(current), location).toString()
-                            if (!isGoogleMapsHost(URL(next).host)) {
-                                error("share link redirected outside Google Maps")
-                            }
-                            DestinationLinkParser.parse(next)
-                                ?.takeIf { it.hasCoordinates }
-                                ?.let { return@withContext Result.success(it) }
-                            current = next
-                            return@repeat
-                        }
-                        if (status !in 200..299) {
-                            error("share link could not be resolved: HTTP $status")
-                        }
-                        val resolved = DestinationLinkParser.parse(current)
-                        return@withContext Result.success(
-                            resolved?.takeIf { it.hasCoordinates } ?: error(
-                                "Google Maps did not include coordinates in the shared link",
-                            ),
-                        )
-                    } finally {
-                        connection.disconnect()
-                    }
-                }
-                error("share link used too many redirects")
+                resolveBlocking(destination.source)
             }
         }
+
+    private fun resolveBlocking(source: String): SharedDestination {
+            var current = source
+            repeat(MAX_REDIRECTS) {
+                val connection = (URL(current).openConnection() as HttpURLConnection).apply {
+                    requestMethod = "GET"
+                    instanceFollowRedirects = false
+                    connectTimeout = 8_000
+                    readTimeout = 8_000
+                    useCaches = false
+                    setRequestProperty("User-Agent", USER_AGENT)
+                }
+                try {
+                    val status = connection.responseCode
+                    if (status in 300..399) {
+                        val location = connection.getHeaderField("Location")
+                            ?: error("share link redirect did not include a destination")
+                        val next = URL(URL(current), location).toString()
+                        if (!isGoogleMapsHost(URL(next).host)) {
+                            error("share link redirected outside Google Maps")
+                        }
+                        val parsed = DestinationLinkParser.parse(next)
+                        if (parsed?.hasCoordinates == true) {
+                            return parsed
+                        }
+                        current = next
+                        return@repeat
+                    }
+                    if (status !in 200..299) {
+                        error("share link could not be resolved: HTTP $status")
+                    }
+                    val resolved = DestinationLinkParser.parse(current)
+                    if (resolved?.hasCoordinates == true) {
+                        return resolved
+                    }
+                    error("Google Maps did not include coordinates in the shared link")
+                } finally {
+                    connection.disconnect()
+                }
+            }
+            error("share link used too many redirects")
+    }
 
     private fun isShortMapsLink(source: String): Boolean =
         runCatching {
